@@ -114,7 +114,7 @@ from ic_knockoff_poly_reg import ICKnockoffPolyReg
 rng = np.random.default_rng(0)
 p = 15
 
-# Unlabeled pool: 2 000 observations, no y
+# Unlabeled pool: 2000 observations, no y
 X_unlabeled = rng.uniform(0.5, 3.0, size=(2000, p))
 
 # Labeled subset: only 80 observations
@@ -130,7 +130,7 @@ model = ICKnockoffPolyReg(
     random_state=0,
 )
 
-# Phase 1 uses X_unlabeled + X_labeled (2 080 rows)
+# Phase 1 uses X_unlabeled + X_labeled (2080 rows)
 # Phases 2–3 use only (X_labeled, y_labeled) (80 rows)
 model.fit(X_labeled, y_labeled, X_unlabeled=X_unlabeled)
 
@@ -180,7 +180,183 @@ for step in r.iteration_history:
 | `algorithm` | `ICKnockoffPolyReg`: main iterative pipeline |
 | `evaluation` | `compute_fdr`, `compute_tpr`, `memory_tracker`: metrics |
 
-## Running Tests
+## Output Format
+
+After calling `fit`, all methods return a ``ResultBundle`` — a unified
+dataclass that captures selections, statistical properties, and compute cost.
+It is serialisable to JSON and CSV for cross-language comparison.
+
+### ResultBundle fields
+
+| Field | Type | Description |
+|---|---|---|
+| `method` | str | Method identifier, e.g. `"ic_knock_poly"` |
+| `selected_names` | list[str] | Human-readable polynomial feature names |
+| `selected_base_indices` | list[int] | Base feature indices in selected terms |
+| `selected_terms` | list[[int, int]] | `[base_idx, exponent]` pairs |
+| `coef` | list[float] | Regression coefficients |
+| `intercept` | float | Fitted intercept |
+| `n_selected` | int | Number of selected terms |
+| `r_squared` | float | R² on training data |
+| `adj_r_squared` | float | Adjusted R² |
+| `residual_ss` | float | Residual sum of squares |
+| `bic` | float | Bayesian Information Criterion |
+| `aic` | float | Akaike Information Criterion |
+| `elapsed_seconds` | float | Wall-clock fit time |
+| `peak_memory_mb` | float | Peak memory usage |
+| `fdr` | float or None | Empirical FDR (needs ground truth) |
+| `tpr` | float or None | True positive rate (needs ground truth) |
+| `params` | dict | Method-specific hyper-parameters |
+| `extra` | dict | Method-specific diagnostics |
+
+### Generating a ResultBundle from IC-Knock-Poly
+
+```python
+import time, tracemalloc, json
+from ic_knockoff_poly_reg import ICKnockoffPolyReg
+
+model = ICKnockoffPolyReg(degree=2, Q=0.10, random_state=42)
+
+tracemalloc.start()
+t0 = time.perf_counter()
+model.fit(X, y)
+elapsed = time.perf_counter() - t0
+_, peak = tracemalloc.get_traced_memory()
+tracemalloc.stop()
+
+rb = model.to_result_bundle(
+    X, y,
+    dataset="experiment.csv",
+    true_base_indices={0, 2},         # optional ground truth
+    elapsed_seconds=elapsed,
+    peak_memory_mb=peak / 1024**2,
+)
+
+# JSON output
+print(rb.to_json())
+
+# Flat CSV row
+print(rb.to_csv_row())
+
+# Round-trip from JSON
+from ic_knockoff_poly_reg import ResultBundle
+rb2 = ResultBundle.from_dict(json.loads(rb.to_json()))
+```
+
+### JSON schema
+
+```json
+{
+  "method": "ic_knock_poly",
+  "dataset": "experiment.csv",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "selected_names": ["x0", "x2^(-1)"],
+  "selected_base_indices": [0, 2],
+  "selected_terms": [[0, 1], [2, -1]],
+  "coef": [1.02, 0.98],
+  "intercept": 0.05,
+  "n_selected": 2,
+  "fit": {
+    "r_squared": 0.982,
+    "adj_r_squared": 0.981,
+    "residual_ss": 0.12,
+    "total_ss": 6.67,
+    "bic": -452.1,
+    "aic": -457.3
+  },
+  "discovery": {
+    "fdr": 0.0,
+    "tpr": 1.0,
+    "n_true_positives": 2,
+    "n_false_positives": 0,
+    "n_false_negatives": 0
+  },
+  "compute": {
+    "elapsed_seconds": 3.2,
+    "peak_memory_mb": 48.1
+  },
+  "params": { "degree": 2, "Q": 0.10, "n_components": 2 },
+  "extra": { "n_iterations": 3 }
+}
+```
+
+## Baseline Methods
+
+`python/baselines/` contains five comparison methods that use the **same
+polynomial dictionary** Φ(·) as IC-Knock-Poly:
+
+| Class | Method | FDR control |
+|---|---|---|
+| `PolyLasso` | Lasso + CV alpha selection | ✗ |
+| `PolyOMP` | Orthogonal Matching Pursuit + CV | ✗ |
+| `PolyCLIME` | CLIME precision matrix + one-shot knockoff filter | ✓ |
+| `PolyKnockoff` | Standard Gaussian knockoffs + Lasso | ✓ |
+| `SparsePolySTLSQ` | Sequential Thresholded Least Squares (SINDy-style) | ✗ |
+
+Each baseline exposes `fit(X, y)`, `predict(X)`, and `to_result_bundle(...)`.
+
+### Running all methods on one dataset
+
+```bash
+# From CSV (last column = response)
+python -m baselines.run_comparison --csv data/experiment.csv \
+       --output results/exp1 --degree 2 --Q 0.10 --seed 42
+
+# Specify a subset of methods
+python -m baselines.run_comparison --csv data/experiment.csv \
+       --methods ic_knock_poly poly_lasso poly_omp
+
+# From NPZ archive
+python -m baselines.run_comparison --npz data/experiment.npz \
+       --output results/exp1
+```
+
+Or from the Python API:
+
+```python
+from baselines.data_loader import DataLoader
+from baselines.run_comparison import run_comparison, print_table
+
+bundle = DataLoader.from_csv("data/experiment.csv")
+
+# Optionally supply unlabeled data for IC-Knock-Poly's semi-supervised mode
+bundle_semi = DataLoader.from_csv(
+    "data/experiment.csv",
+    unlabeled_path="data/unlabeled.csv",
+)
+
+results = run_comparison(
+    bundle,
+    true_base_indices={0, 2},       # optional ground truth
+    output_prefix="results/exp1",   # write JSON + CSV
+    degree=2,
+    Q=0.10,
+    random_state=42,
+)
+print_table(results)
+```
+
+The runner writes:
+- `results/exp1_results.json` — list of JSON objects, one per method
+- `results/exp1_results.csv`  — flat table with one row per method
+
+### Using individual baselines
+
+```python
+from baselines import PolyLasso, PolyOMP, SparsePolySTLSQ
+from baselines.data_loader import DataLoader
+
+bundle = DataLoader.from_csv("data/experiment.csv")
+X, y = bundle.X, bundle.y
+
+for Cls in [PolyLasso, PolyOMP, SparsePolySTLSQ]:
+    model = Cls(degree=2)
+    model.fit(X, y)
+    rb = model.to_result_bundle(X, y, dataset="experiment.csv")
+    print(rb.method, rb.n_selected, rb.r_squared)
+```
+
+
 
 ```bash
 cd python

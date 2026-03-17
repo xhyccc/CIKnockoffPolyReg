@@ -79,9 +79,127 @@ For each iteration t:
 
 Both satisfy Σ q_t ≤ Q, guaranteeing global FDR ≤ Q.
 
-## Quick Start
+## Output Format
 
-### Python — supervised
+Every method — IC-Knock-Poly as well as all baselines — produces a
+**`ResultBundle`** that is serialisable to JSON and CSV.
+
+### JSON schema
+
+```json
+{
+  "method": "ic_knock_poly",
+  "dataset": "experiment.csv",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "selected_names": ["x0", "x2^(-1)"],
+  "selected_base_indices": [0, 2],
+  "selected_terms": [[0, 1], [2, -1]],
+  "coef": [1.02, 0.98],
+  "intercept": 0.05,
+  "n_selected": 2,
+  "fit": {
+    "r_squared": 0.982,
+    "adj_r_squared": 0.981,
+    "residual_ss": 0.12,
+    "total_ss": 6.67,
+    "bic": -452.1,
+    "aic": -457.3
+  },
+  "discovery": {
+    "fdr": 0.0,
+    "tpr": 1.0,
+    "n_true_positives": 2,
+    "n_false_positives": 0,
+    "n_false_negatives": 0
+  },
+  "compute": {
+    "elapsed_seconds": 3.2,
+    "peak_memory_mb": 48.1
+  },
+  "params": {
+    "degree": 2,
+    "Q": 0.10
+  }
+}
+```
+
+The `discovery` block is populated only when ground-truth feature indices are
+supplied (`true_base_indices=`).  C++ and Rust methods omit `discovery` and
+`timestamp` (they output the same `fit` / `compute` / `params` blocks).
+
+### Accessing results in Python
+
+```python
+# JSON string
+print(model.to_result_bundle(X, y, dataset="exp.csv").to_json())
+
+# Flat dict for CSV
+row = model.to_result_bundle(X, y).to_csv_row()
+
+# Round-trip from JSON
+from ic_knockoff_poly_reg import ResultBundle
+rb = ResultBundle.from_dict(json.loads(json_str))
+```
+
+## Baseline Methods
+
+Each language folder contains a `baselines/` directory with the following
+implementations that use the **same polynomial dictionary** as IC-Knock-Poly
+but without the iterative GMM + PoSI α-spending machinery:
+
+| Method | Description |
+|---|---|
+| **PolyLasso** | Polynomial dictionary + cross-validated Lasso (no FDR control) |
+| **PolyOMP** | Polynomial dictionary + Orthogonal Matching Pursuit |
+| **PolyCLIME** | CLIME-based sparse precision matrix + one-shot knockoff filter (Python only) |
+| **PolyKnockoff** | Standard Gaussian knockoff filter on polynomial features (Python only) |
+| **SparsePolySTLSQ** | Sequential Thresholded Least Squares (SINDy-style) |
+
+All baselines expose `fit(X, y)` / `predict(X)` and `to_result_bundle(...)`.
+
+## Running Comparisons
+
+### Python — all methods on one dataset
+
+```bash
+# From CSV (last column = response)
+python -m baselines.run_comparison --csv data/experiment.csv --output results/exp1 \
+       --degree 2 --Q 0.10 --seed 42
+
+# From NPZ (keys: X, y, [X_unlabeled])
+python -m baselines.run_comparison --npz data/experiment.npz --output results/exp1
+```
+
+Or via the Python API:
+
+```python
+from baselines.data_loader import DataLoader
+from baselines.run_comparison import run_comparison, print_table
+
+bundle = DataLoader.from_csv("data/experiment.csv")
+results = run_comparison(bundle, true_base_indices={0, 2}, output_prefix="results/exp1")
+print_table(results)
+```
+
+### C++ — PolyLasso, PolyOMP, PolySTLSQ
+
+```bash
+cd cpp && mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build .
+./baseline_runner ../../data/experiment.csv 2 ../../results/exp1_cpp
+```
+
+### Rust — PolyLasso, PolyOMP, PolySTLSQ
+
+```bash
+cd rust
+cargo run --bin baseline_runner -- ../data/experiment.csv 2 ../results/exp1_rust
+```
+
+All three runners write `_results.json` and `_results.csv` using the same
+field names, so results can be concatenated and compared directly.
+
+
 ```python
 import numpy as np
 from ic_knockoff_poly_reg import ICKnockoffPolyReg
@@ -104,7 +222,7 @@ from ic_knockoff_poly_reg import ICKnockoffPolyReg
 rng = np.random.default_rng(0)
 p = 15
 
-# 2 000 unlabeled observations — used only for distribution learning
+# 2000 unlabeled observations — used only for distribution learning
 X_unlabeled = rng.uniform(0.5, 3.0, size=(2000, p))
 
 # 80 labeled observations — used for regression
@@ -112,7 +230,7 @@ X_labeled = rng.uniform(0.5, 3.0, size=(80, p))
 y_labeled  = X_labeled[:, 0] + 1.0 / X_labeled[:, 2] + 0.1 * rng.standard_normal(80)
 
 model = ICKnockoffPolyReg(degree=2, n_components=3, Q=0.10, random_state=0)
-# Phase 1 sees all 2 080 rows; Phases 2-3 use only the 80 labeled rows
+# Phase 1 sees all 2080 rows; Phases 2-3 use only the 80 labeled rows
 model.fit(X_labeled, y_labeled, X_unlabeled=X_unlabeled)
 print("Selected:", model.result_.selected_poly_names)
 ```

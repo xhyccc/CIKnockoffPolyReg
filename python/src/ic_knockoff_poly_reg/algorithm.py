@@ -34,6 +34,7 @@ from .gmm_phase import PenalizedGMM
 from .knockoffs import ConditionalKnockoffGenerator
 from .polynomial import PolynomialDictionary
 from .posi_threshold import AlphaSpending, compute_knockoff_threshold
+from .evaluation import ResultBundle, _compute_fit_stats
 
 
 @dataclass
@@ -390,6 +391,95 @@ class ICKnockoffPolyReg:
         if Z.shape[1] == 0:
             return np.full(X.shape[0], self.result_.intercept)
         return Z @ self.result_.coef + self.result_.intercept
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def to_result_bundle(
+        self,
+        X: NDArray[np.float64],
+        y: NDArray[np.float64],
+        *,
+        dataset: str = "",
+        true_base_indices: Optional[set] = None,
+        elapsed_seconds: float = float("nan"),
+        peak_memory_mb: float = float("nan"),
+    ) -> ResultBundle:
+        """Convert the fitted result into a ``ResultBundle`` for research output.
+
+        Parameters
+        ----------
+        X : (n_samples, p) feature matrix used during ``fit``.
+        y : (n_samples,) response vector used during ``fit``.
+        dataset : str, optional
+            Name or path of the dataset (for reporting purposes).
+        true_base_indices : set of int or None, optional
+            Ground-truth set of base feature indices that have non-zero
+            contributions.  When provided, FDR and TPR are computed.
+        elapsed_seconds : float, optional
+            Wall-clock seconds spent in ``fit`` (pass via ``time.perf_counter``).
+        peak_memory_mb : float, optional
+            Peak memory in MB (pass via ``memory_tracker``).
+
+        Returns
+        -------
+        ResultBundle
+        """
+        self._check_fitted()
+        r = self.result_
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64).ravel()
+
+        poly_dict = PolynomialDictionary(
+            degree=self.degree, include_bias=self.include_bias
+        )
+        y_pred = self.predict(X)
+        n_params = len(r.coef) + 1  # +1 for intercept
+        r2, adj_r2, ss_res, ss_tot, bic, aic = _compute_fit_stats(y, y_pred, n_params)
+
+        fdr = tpr = n_tp = n_fp = n_fn = None
+        if true_base_indices is not None:
+            true_set = set(true_base_indices)
+            sel_set = set(r.selected_base_indices)
+            n_tp = len(sel_set & true_set)
+            n_fp = len(sel_set - true_set)
+            n_fn = len(true_set - sel_set)
+            fdr = n_fp / max(1, len(sel_set))
+            tpr = n_tp / max(1, len(true_set))
+
+        return ResultBundle(
+            method="ic_knock_poly",
+            dataset=dataset,
+            selected_names=list(r.selected_poly_names),
+            selected_base_indices=sorted(r.selected_base_indices),
+            selected_terms=[[int(b), int(e)] for b, e in r.selected_terms],
+            coef=list(r.coef),
+            intercept=float(r.intercept),
+            n_selected=len(r.selected_terms),
+            r_squared=r2,
+            adj_r_squared=adj_r2,
+            residual_ss=ss_res,
+            total_ss=ss_tot,
+            bic=bic,
+            aic=aic,
+            elapsed_seconds=elapsed_seconds,
+            peak_memory_mb=peak_memory_mb,
+            fdr=fdr,
+            tpr=tpr,
+            n_true_positives=n_tp,
+            n_false_positives=n_fp,
+            n_false_negatives=n_fn,
+            params={
+                "degree": self.degree,
+                "n_components": self.n_components,
+                "Q": self.Q,
+                "spending_sequence": self.spending_sequence,
+                "gamma": self.gamma,
+                "max_iter": self.max_iter,
+            },
+            extra={"n_iterations": r.n_iterations, "iteration_history": r.iteration_history},
+        )
 
     # ------------------------------------------------------------------
     # Private helpers

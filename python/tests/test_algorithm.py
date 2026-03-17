@@ -174,8 +174,6 @@ def _make_semi_supervised_dataset(n_labeled=80, n_unlabeled=400, p=6, seed=7):
     X_labeled = rng.uniform(0.5, 3.0, size=(n_labeled, p))
     y_labeled = X_labeled[:, 0] + 1.0 / X_labeled[:, 1] + 0.1 * rng.standard_normal(n_labeled)
     return X_labeled, y_labeled, X_unlabeled
-
-
 class TestSemiSupervisedFit:
     """Tests for the X_unlabeled parameter in ICKnockoffPolyReg.fit()."""
 
@@ -214,8 +212,10 @@ class TestSemiSupervisedFit:
 
     def test_semi_supervised_gmm_uses_more_data(self):
         """GMM fitted in semi-supervised mode sees more samples than supervised."""
+        n_labeled_samples = 60
+        n_unlabeled_samples = 300
         X_labeled, y_labeled, X_unlabeled = _make_semi_supervised_dataset(
-            n_labeled=60, n_unlabeled=300, p=4
+            n_labeled=n_labeled_samples, n_unlabeled=n_unlabeled_samples, p=4
         )
         model_sup = ICKnockoffPolyReg(
             degree=1, n_components=2, gmm_alpha=0.1, max_iter=2, random_state=5

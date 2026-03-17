@@ -17,3 +17,7 @@ categories = ["science", "mathematics"]
 [[bin]]
 name = "ic_knockoff_demo"
 path = "src/main.rs"
+
+[[bin]]
+name = "baseline_runner"
+path = "src/baseline_runner.rs"
