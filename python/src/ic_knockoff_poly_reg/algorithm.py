@@ -72,6 +72,19 @@ class ICKnockoffPolyResult:
 class ICKnockoffPolyReg:
     """Iterative Conditional Knockoffs for Sparse Rational Polynomial Regression.
 
+    Discovers sparse rational polynomial equations (e.g. ``y = x₁² + 1/x₂``)
+    in ultra-high dimensional settings (``p ≫ n``) while strictly controlling
+    the False Discovery Rate (FDR) via a PoSI α-spending sequence.
+
+    **Operating modes**
+
+    * **Supervised**: call ``fit(X, y)`` with a single labeled dataset.
+    * **Semi-supervised**: call ``fit(X_labeled, y_labeled,
+      X_unlabeled=X_unlabeled)`` when you have a large pool of unlabeled
+      feature observations plus a smaller labeled subset.  Phase 1 (GMM
+      distribution learning) will use all observations; Phases 2–3 (knockoff
+      generation and polynomial regression) use only the labeled pairs.
+
     Parameters
     ----------
     degree : int
@@ -130,17 +143,58 @@ class ICKnockoffPolyReg:
         self,
         X: NDArray[np.float64],
         y: NDArray[np.float64],
+        X_unlabeled: Optional[NDArray[np.float64]] = None,
     ) -> "ICKnockoffPolyReg":
         """Fit the IC-Knock-Poly algorithm.
 
+        Supports both **supervised** and **semi-supervised** modes.
+
         Parameters
         ----------
-        X : (n_samples, p) base feature matrix
-        y : (n_samples,) target vector
+        X : array-like of shape (n_labeled, p)
+            Labeled feature matrix.  Each row is one observation; each column
+            is one base feature (must be numeric, non-constant, and free of
+            ``NaN``/``Inf``).  All feature values used in negative powers
+            (rational terms) should be bounded away from zero.
+        y : array-like of shape (n_labeled,)
+            Continuous response vector aligned with ``X``.
+        X_unlabeled : array-like of shape (N_unlabeled, p) or None, optional
+            **Semi-supervised mode.** Additional *unlabeled* observations of
+            the same ``p`` base features.  When provided, **Phase 1** (GMM
+            distribution learning) is fitted on
+            ``np.vstack([X_unlabeled, X])`` so that the joint feature
+            distribution is estimated from all available data.  Phases 2–3
+            (knockoff generation and polynomial regression) use only the
+            labeled ``(X, y)`` pairs.  Pass ``None`` (default) for purely
+            supervised operation.
 
         Returns
         -------
         self
+
+        Notes
+        -----
+        **Data format**
+
+        * ``X`` must be a 2-D array or anything that ``numpy.asarray`` can
+          convert to a ``float64`` matrix.  Accepted sources include NumPy
+          arrays, pandas DataFrames (values only), and nested Python lists.
+        * ``y`` must be a 1-D numeric array of length ``n_labeled``.
+        * Feature columns should be on comparable scales; extremely skewed
+          distributions may benefit from a log- or quantile-transform before
+          calling ``fit``.
+        * Columns that could take zero or near-zero values (|x| < 1e-8) are
+          automatically clipped before negative-power expansion; no manual
+          imputation is required.
+
+        **Semi-supervised workflow**
+
+        When the labeled dataset is small relative to the feature dimension
+        (``n_labeled ≪ p``), pass the additional unlabeled rows via
+        ``X_unlabeled`` to improve the GMM precision-matrix estimates used for
+        knockoff generation::
+
+            model.fit(X_labeled, y_labeled, X_unlabeled=X_unlabeled)
         """
         X = np.asarray(X, dtype=np.float64)
         y = np.asarray(y, dtype=np.float64).ravel()
@@ -155,7 +209,17 @@ class ICKnockoffPolyReg:
             max_iter=200,
             random_state=self.random_state,
         )
-        self.gmm_.fit(X)
+        if X_unlabeled is not None:
+            X_unlabeled = np.asarray(X_unlabeled, dtype=np.float64)
+            if X_unlabeled.ndim != 2 or X_unlabeled.shape[1] != p:
+                raise ValueError(
+                    f"X_unlabeled must have shape (N, {p}) to match X, "
+                    f"got {X_unlabeled.shape}."
+                )
+            X_for_gmm = np.vstack([X_unlabeled, X])
+        else:
+            X_for_gmm = X
+        self.gmm_.fit(X_for_gmm)
 
         # ----------------------------------------------------------
         # Phase 2: Initialisation
@@ -308,11 +372,14 @@ class ICKnockoffPolyReg:
 
         Parameters
         ----------
-        X : (n_samples, p) base feature matrix
+        X : array-like of shape (n_samples, p)
+            Base feature matrix with the same ``p`` columns used during
+            ``fit``.  Accepted sources are the same as for ``fit``.
 
         Returns
         -------
-        y_hat : (n_samples,) predictions
+        y_hat : ndarray of shape (n_samples,)
+            Predicted response values.
         """
         self._check_fitted()
         X = np.asarray(X, dtype=np.float64)
