@@ -1,0 +1,19 @@
+[package]
+name = "ic_knockoff_poly_reg"
+version = "0.1.0"
+edition = "2021"
+description = "IC-Knock-Poly: Iterative Conditional Knockoffs for Sparse Rational Polynomial Regression"
+license = "MIT"
+keywords = ["knockoffs", "fdr-control", "polynomial-regression", "variable-selection"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+# No external dependencies — uses only the standard library for correctness
+# and portability.
+
+[dev-dependencies]
+# Tests use only the standard library as well.
+
+[[bin]]
+name = "ic_knockoff_demo"
+path = "src/main.rs"
