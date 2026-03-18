@@ -1,4 +1,4 @@
-"""Visualisation utilities for IC-Knock-Poly simulation results.
+"""Visualization utilities for IC-Knock-Poly simulation results.
 
 Provides functions to generate publication-quality plots from the
 :class:`~simulations.run_simulation.SimulationResult` objects returned by
@@ -52,7 +52,7 @@ def _require_matplotlib():
         return plt, matplotlib
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
-            "matplotlib is required for visualisation.  "
+            "matplotlib is required for visualization.  "
             "Install it with: pip install matplotlib"
         ) from exc
 

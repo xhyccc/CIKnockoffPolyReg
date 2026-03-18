@@ -536,7 +536,7 @@ class TestSweepDegreeNonzeroConfigs:
 # ---------------------------------------------------------------------------
 
 class TestVisualize:
-    """Smoke tests for the visualise module (no display needed)."""
+    """Smoke tests for the visualize module (no display needed)."""
 
     @pytest.fixture(autouse=True)
     def use_agg_backend(self):
