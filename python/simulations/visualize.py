@@ -391,6 +391,7 @@ def plot_all(
     output_dir: Optional[str] = None,
     x_fields: Optional[Sequence[str]] = None,
     dpi: int = 150,
+    fmt: str = "pdf",
     show: bool = False,
 ) -> dict[str, object]:
     """Generate all standard plots for a simulation sweep.
@@ -407,13 +408,17 @@ def plot_all(
     results : list of SimulationResult
         As returned by :func:`~simulations.run_simulation.run_simulation_suite`.
     output_dir : str or None
-        Directory to save PNG files.  Created if it does not exist.
+        Directory to save figure files.  Created if it does not exist.
         When ``None`` the figures are returned but not saved.
     x_fields : sequence of str or None
         Which x-axis dimensions to produce plots for.  Defaults to all
         dimensions that have more than one unique value in ``results``.
     dpi : int
-        Figure resolution for saved images (default 150).
+        Figure resolution for saved raster images (default 150).
+        Ignored for vector formats such as ``"pdf"`` and ``"svg"``.
+    fmt : str
+        Output file format passed directly to ``savefig`` (default ``"pdf"``).
+        Common values: ``"pdf"``, ``"png"``, ``"svg"``.
     show : bool
         Call ``plt.show()`` after generating all figures.  Default ``False``.
 
@@ -452,7 +457,10 @@ def plot_all(
         name = f"prediction_error_vs_{xlab}"
         figures[name] = fig
         if output_dir:
-            fig.savefig(os.path.join(output_dir, f"{name}.png"), dpi=dpi)
+            fig.savefig(
+                os.path.join(output_dir, f"{name}.{fmt}"),
+                dpi=dpi, format=fmt,
+            )
 
         # 2. Scalability (time + memory)
         fig2, (ax_t, ax_m) = plt.subplots(1, 2, figsize=(12, 4))
@@ -461,7 +469,10 @@ def plot_all(
         name2 = f"scalability_vs_{xlab}"
         figures[name2] = fig2
         if output_dir:
-            fig2.savefig(os.path.join(output_dir, f"{name2}.png"), dpi=dpi)
+            fig2.savefig(
+                os.path.join(output_dir, f"{name2}.{fmt}"),
+                dpi=dpi, format=fmt,
+            )
 
         # 3. Selection metrics (FDR, precision, recall, F1, AUC)
         sel_metrics = [
@@ -483,7 +494,10 @@ def plot_all(
         name3 = f"selection_metrics_vs_{xlab}"
         figures[name3] = fig3
         if output_dir:
-            fig3.savefig(os.path.join(output_dir, f"{name3}.png"), dpi=dpi)
+            fig3.savefig(
+                os.path.join(output_dir, f"{name3}.{fmt}"),
+                dpi=dpi, format=fmt,
+            )
 
         # 4. Non-zero identification
         fig4, ax4 = plt.subplots(figsize=(7, 5))
@@ -492,7 +506,10 @@ def plot_all(
         name4 = f"nonzero_identification_vs_{xlab}"
         figures[name4] = fig4
         if output_dir:
-            fig4.savefig(os.path.join(output_dir, f"{name4}.png"), dpi=dpi)
+            fig4.savefig(
+                os.path.join(output_dir, f"{name4}.{fmt}"),
+                dpi=dpi, format=fmt,
+            )
 
     if show:
         plt.show()
