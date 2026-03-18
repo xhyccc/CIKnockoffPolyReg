@@ -12,6 +12,93 @@ Identifies sparse rational polynomial equations (e.g. `y = x₁² + 1/x₂`) in 
 | `cpp/`    | C++17    | Core computational routines (matrix ops, polynomial expansion, FDR threshold) |
 | `rust/`   | Rust 2021 | Statistical utilities (polynomial expansion, knockoff W-stats, PoSI threshold) |
 
+## Kernel Backends
+
+IC-Knock-Poly exposes a **unified kernel interface** so callers can opt into the
+compiled C++ or Rust implementations for the three hot sub-tasks:
+
+| Sub-task | Python symbol | Description |
+|---|---|---|
+| Polynomial expansion | `PolynomialKernel.expand` | Rational dictionary Φ(X) |
+| Knockoff W-statistics | `KnockoffKernel.w_statistics` | W_j = |β_j| − |β̃_j| |
+| PoSI threshold | `PosiKernel.alpha_spending_budget` / `knockoff_threshold` | FDR budget q_t, threshold τ_t |
+
+Three backend implementations are available:
+
+| Backend | Availability | Notes |
+|---------|-------------|-------|
+| `"python"` | Always (default) | Pure Python / NumPy; no compilation required |
+| `"cpp"` | After building the C++ shared library | C++17 loaded via `ctypes` |
+| `"rust"` | After building the Rust cdylib | Rust 2021 loaded via `ctypes` |
+
+### Building the native backends
+
+**C++ backend** (produces `cpp/build/libic_knockoff_py.so`):
+
+```bash
+cmake -B cpp/build -S cpp -DCMAKE_BUILD_TYPE=Release
+cmake --build cpp/build --target ic_knockoff_py
+```
+
+**Rust backend** (produces `rust/target/release/libic_knockoff_poly_reg.so`):
+
+```bash
+cd rust && cargo build --release
+```
+
+Override default library search paths via environment variables:
+
+```bash
+export LIBIC_KNOCKOFF_CPP_PATH=/path/to/libic_knockoff_py.so
+export LIBIC_KNOCKOFF_RUST_PATH=/path/to/libic_knockoff_poly_reg.so
+```
+
+### Discovering available backends
+
+```python
+from ic_knockoff_poly_reg import AVAILABLE_BACKENDS
+
+print(AVAILABLE_BACKENDS)  # frozenset({'python', 'cpp', 'rust'})
+```
+
+`AVAILABLE_BACKENDS` is a `frozenset` probed at import time; it contains only
+the backends whose shared libraries can actually be loaded.
+
+### Using kernels directly
+
+```python
+import numpy as np
+from ic_knockoff_poly_reg import create_kernels
+
+# Select a backend
+poly, knock, posi = create_kernels("cpp")   # or "python" / "rust"
+
+# Polynomial expansion
+X = np.random.uniform(0.5, 3.0, size=(100, 5))
+ef = poly.expand(X, degree=2, include_bias=True)
+
+# Knockoff W-statistics
+beta_orig  = np.array([1.0, 0.0, -0.5, 0.0, 0.3])
+beta_knock = np.array([0.1, 0.0, -0.1, 0.0, 0.3])
+W = knock.w_statistics(beta_orig, beta_knock)
+
+# PoSI alpha-spending budget and threshold
+qt  = posi.alpha_spending_budget(t=1, Q=0.1, sequence="riemann_zeta")
+tau = posi.knockoff_threshold(W, q_t=qt)
+```
+
+### Selecting a backend for the main estimator
+
+Pass `backend=` to `ICKnockoffPolyReg`; the polynomial expansion, W-statistics,
+and PoSI threshold in Phase 3 are all routed through the chosen kernel:
+
+```python
+from ic_knockoff_poly_reg import ICKnockoffPolyReg
+
+model = ICKnockoffPolyReg(degree=2, Q=0.10, backend="rust")
+model.fit(X, y)
+```
+
 ## Data Interface
 
 ### What your dataset must look like
@@ -199,6 +286,9 @@ cargo run --bin baseline_runner -- ../data/experiment.csv 2 ../results/exp1_rust
 All three runners write `_results.json` and `_results.csv` using the same
 field names, so results can be concatenated and compared directly.
 
+## Usage Examples
+
+### Python — basic (default Python backend)
 
 ```python
 import numpy as np
@@ -210,6 +300,27 @@ X = rng.uniform(0.5, 3.0, size=(n, p))
 y = X[:, 0] + 1.0 / X[:, 1] + 0.1 * rng.standard_normal(n)
 
 model = ICKnockoffPolyReg(degree=2, n_components=2, Q=0.10, random_state=42)
+model.fit(X, y)
+print("Selected:", model.result_.selected_poly_names)
+```
+
+### Python — using a compiled kernel backend
+
+After building the native library (see [Building the native backends](#building-the-native-backends)):
+
+```python
+import numpy as np
+from ic_knockoff_poly_reg import ICKnockoffPolyReg, AVAILABLE_BACKENDS
+
+print(AVAILABLE_BACKENDS)  # e.g. frozenset({'python', 'cpp', 'rust'})
+
+rng = np.random.default_rng(42)
+n, p = 200, 20
+X = rng.uniform(0.5, 3.0, size=(n, p))
+y = X[:, 0] + 1.0 / X[:, 1] + 0.1 * rng.standard_normal(n)
+
+# Route Phase 3 kernels through the Rust shared library
+model = ICKnockoffPolyReg(degree=2, n_components=2, Q=0.10, random_state=42, backend="rust")
 model.fit(X, y)
 print("Selected:", model.result_.selected_poly_names)
 ```
