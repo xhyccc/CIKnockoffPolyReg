@@ -10,7 +10,7 @@ from .gmm_phase import PenalizedGMM
 from .knockoffs import ConditionalKnockoffGenerator
 from .polynomial import PolynomialDictionary
 from .posi_threshold import AlphaSpending, compute_knockoff_threshold
-from .evaluation import compute_fdr, compute_tpr, DiscoveryMetrics
+from .evaluation import compute_fdr, compute_tpr, DiscoveryMetrics, ResultBundle
 
 __all__ = [
     "ICKnockoffPolyReg",
@@ -22,4 +22,5 @@ __all__ = [
     "compute_fdr",
     "compute_tpr",
     "DiscoveryMetrics",
+    "ResultBundle",
 ]

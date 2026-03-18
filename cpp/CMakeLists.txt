@@ -49,3 +49,17 @@ add_executable(test_ic_knockoff tests/test_main.cpp)
 target_link_libraries(test_ic_knockoff PRIVATE ic_knockoff)
 
 add_test(NAME unit_tests COMMAND test_ic_knockoff)
+
+# ---------------------------------------------------------------------------
+# Baseline comparison runner
+# ---------------------------------------------------------------------------
+add_executable(baseline_runner
+    baselines/baseline_runner.cpp
+    baselines/baselines.cpp
+)
+target_include_directories(baseline_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/baselines
+)
+target_link_libraries(baseline_runner PRIVATE ic_knockoff)
+
