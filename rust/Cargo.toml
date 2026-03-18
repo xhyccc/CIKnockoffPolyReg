@@ -7,6 +7,12 @@ license = "MIT"
 keywords = ["knockoffs", "fdr-control", "polynomial-regression", "variable-selection"]
 categories = ["science", "mathematics"]
 
+[lib]
+name = "ic_knockoff_poly_reg"
+# cdylib: shared library loadable by Python ctypes
+# rlib:   Rust library usable by other Rust crates / tests
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 # No external dependencies — uses only the standard library for correctness
 # and portability.

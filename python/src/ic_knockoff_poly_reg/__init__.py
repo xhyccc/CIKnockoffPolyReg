@@ -11,6 +11,17 @@ from .knockoffs import ConditionalKnockoffGenerator
 from .polynomial import PolynomialDictionary
 from .posi_threshold import AlphaSpending, compute_knockoff_threshold
 from .evaluation import compute_fdr, compute_tpr, DiscoveryMetrics, ResultBundle
+from .kernels import (
+    create_kernels,
+    KernelSet,
+    PolynomialKernel,
+    KnockoffKernel,
+    PosiKernel,
+    PythonPolynomialKernel,
+    PythonKnockoffKernel,
+    PythonPosiKernel,
+    AVAILABLE_BACKENDS,
+)
 
 __all__ = [
     "ICKnockoffPolyReg",
@@ -23,4 +34,14 @@ __all__ = [
     "compute_tpr",
     "DiscoveryMetrics",
     "ResultBundle",
+    # Kernel backend API
+    "create_kernels",
+    "KernelSet",
+    "PolynomialKernel",
+    "KnockoffKernel",
+    "PosiKernel",
+    "PythonPolynomialKernel",
+    "PythonKnockoffKernel",
+    "PythonPosiKernel",
+    "AVAILABLE_BACKENDS",
 ]

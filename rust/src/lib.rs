@@ -11,6 +11,7 @@
 //! - [`baselines`]: Sparse polynomial regression baselines for comparison
 
 pub mod baselines;
+pub mod ffi;
 pub mod knockoffs;
 pub mod matrix;
 pub mod polynomial;
