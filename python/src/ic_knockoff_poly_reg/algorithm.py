@@ -33,7 +33,7 @@ from sklearn.preprocessing import StandardScaler
 from .gmm_phase import PenalizedGMM
 from .knockoffs import ConditionalKnockoffGenerator
 from .polynomial import PolynomialDictionary
-from .posi_threshold import AlphaSpending, compute_knockoff_threshold
+from .kernels import create_kernels
 from .evaluation import ResultBundle, _compute_fit_stats
 
 
@@ -108,6 +108,15 @@ class ICKnockoffPolyReg:
         Default True.
     random_state : int or None
         Global seed for reproducibility.
+    backend : str
+        Computational backend for the polynomial expansion, knockoff
+        W-statistics, and PoSI threshold kernels.  One of:
+
+        * ``"python"`` (default) – pure Python / NumPy; always available.
+        * ``"cpp"`` – C++17 shared library loaded via :mod:`ctypes`.
+          Requires ``cmake --build cpp/build`` first.
+        * ``"rust"`` – Rust cdylib loaded via :mod:`ctypes`.
+          Requires ``cargo build --release`` inside ``rust/`` first.
     """
 
     def __init__(
@@ -121,6 +130,7 @@ class ICKnockoffPolyReg:
         max_iter: int = 20,
         include_bias: bool = True,
         random_state: Optional[int] = None,
+        backend: str = "python",
     ) -> None:
         self.degree = degree
         self.n_components = n_components
@@ -131,6 +141,7 @@ class ICKnockoffPolyReg:
         self.max_iter = max_iter
         self.include_bias = include_bias
         self.random_state = random_state
+        self.backend = backend
 
         # State populated during fit
         self.gmm_: Optional[PenalizedGMM] = None
@@ -225,11 +236,7 @@ class ICKnockoffPolyReg:
         # ----------------------------------------------------------
         # Phase 2: Initialisation
         # ----------------------------------------------------------
-        alpha_spender = AlphaSpending(
-            Q=self.Q,
-            sequence=self.spending_sequence,
-            gamma=self.gamma,
-        )
+        poly_kernel, knockoff_kernel, posi_kernel = create_kernels(self.backend)
         poly_dict = PolynomialDictionary(
             degree=self.degree,
             include_bias=self.include_bias,
@@ -259,7 +266,9 @@ class ICKnockoffPolyReg:
         # Phase 3: Iterative expansion and screening
         # ----------------------------------------------------------
         for t in range(1, self.max_iter + 1):
-            q_t = alpha_spender.budget(t)
+            q_t = posi_kernel.alpha_spending_budget(
+                t, self.Q, self.spending_sequence, self.gamma
+            )
 
             # Unselected base features
             all_base = set(range(p))
@@ -282,9 +291,12 @@ class ICKnockoffPolyReg:
             X_B = X[:, B_indices]
             base_names_B = [f"x{j}" for j in B_indices]
 
-            exp_original = poly_dict.expand(X_B, base_names=base_names_B)
-            exp_knockoff = poly_dict.expand(
-                X_B_tilde, base_names=[f"~x{j}" for j in B_indices]
+            exp_original = poly_kernel.expand(
+                X_B, self.degree, self.include_bias, base_names=base_names_B
+            )
+            exp_knockoff = poly_kernel.expand(
+                X_B_tilde, self.degree, self.include_bias,
+                base_names=[f"~x{j}" for j in B_indices],
             )
 
             Phi_B = exp_original.matrix        # (n, 2*|B|*degree + bias)
@@ -306,7 +318,7 @@ class ICKnockoffPolyReg:
             # (d) W_j = |β̂_j| - |β̂_j̃|
             beta_orig = beta[:n_orig]
             beta_knock = beta[n_orig:]
-            W = np.abs(beta_orig) - np.abs(beta_knock)
+            W = knockoff_kernel.w_statistics(beta_orig, beta_knock)
 
             # Track which poly features are already in the active poly set.
             # We represent the active poly set as indices into the current
@@ -314,7 +326,7 @@ class ICKnockoffPolyReg:
             active_poly_current: set[int] = set()
 
             # (e) Knockoff+ threshold
-            tau_t = compute_knockoff_threshold(W, q_t, active_poly_current)
+            tau_t = posi_kernel.knockoff_threshold(W, q_t, active_poly_current)
 
             # (f) Select features with W_j >= tau_t
             if np.isinf(tau_t):
