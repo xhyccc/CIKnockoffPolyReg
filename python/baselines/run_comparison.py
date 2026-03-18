@@ -76,6 +76,7 @@ def run_comparison(
     max_iter: int = 20,
     random_state: Optional[int] = 42,
     methods: Optional[list[str]] = None,
+    backend: str = "python",
 ) -> list[ResultBundle]:
     """Run IC-Knock-Poly and all baselines on the same dataset.
 
@@ -110,6 +111,11 @@ def run_comparison(
         ``["ic_knock_poly", "poly_lasso", "poly_omp",
            "poly_clime", "poly_knockoff", "sparse_poly_stlsq"]``.
         Default ``None`` runs all.
+    backend : str
+        Computational kernel for IC-Knock-Poly's polynomial expansion,
+        W-statistics, and PoSI threshold.  One of ``"python"`` (default),
+        ``"cpp"``, or ``"rust"``.  Baseline methods always use Python;
+        only IC-Knock-Poly uses this setting.
 
     Returns
     -------
@@ -157,6 +163,7 @@ def run_comparison(
                 spending_sequence=spending_sequence,
                 max_iter=max_iter,
                 random_state=random_state,
+                backend=backend,
             )
             model.fit(X, y, X_unlabeled=X_unlabeled)
         elapsed = time.perf_counter() - t0
@@ -388,6 +395,12 @@ def _cli() -> None:
         default=None,
         help="Subset of methods to run (default: all)",
     )
+    parser.add_argument(
+        "--backend",
+        default="python",
+        choices=["python", "cpp", "rust"],
+        help="Kernel backend for IC-Knock-Poly (default: python)",
+    )
     args = parser.parse_args()
 
     if args.csv:
@@ -406,6 +419,7 @@ def _cli() -> None:
         max_iter=args.max_iter,
         random_state=args.seed,
         methods=args.methods,
+        backend=args.backend,
     )
     print_table(results)
 
