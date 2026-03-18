@@ -320,7 +320,7 @@ def run_simulation(config: SimulationConfig) -> list[SimulationResult]:
                     random_state=seed,
                     methods=config.methods,
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 – KeyboardInterrupt/SystemExit are BaseException, not caught here
             print(
                 f"  [WARN] Trial {trial} failed for config '{config.label}': {exc}"
             )

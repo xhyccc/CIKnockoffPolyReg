@@ -107,7 +107,7 @@ class TestGenerateSimulation:
         assert np.all(np.isfinite(ds.y))
 
     def test_k_exceeds_p_raises(self):
-        with pytest.raises(ValueError, match="k"):
+        with pytest.raises(ValueError, match=r"k \(5\) must not exceed p \(4\)"):
             generate_simulation(n_labeled=50, p=4, k=5)
 
     def test_reproducible(self):
