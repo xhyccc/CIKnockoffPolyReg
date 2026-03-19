@@ -2,11 +2,11 @@
 
 This script performs three simulation sweeps:
 
-1. **Default sweep** – varies sample size *n*, sparsity *k*, and evaluation
-   setting (supervised / semi-supervised) at polynomial degree 2, comparing
-   IC-Knock-Poly against all five baseline methods.  *p* is fixed at 5.
+1. **Default sweep** – varies sample size *n* ∈ {100, 200, 300, 400, 500}, sparsity *k*,
+   and evaluation setting (supervised / semi-supervised) at polynomial degree 2,
+   comparing IC-Knock-Poly against all five baseline methods.  *p* is fixed at 5.
 
-2. **p-scaling sweep** – varies the number of base features *p* ∈ {4, 6, 8, 10}
+2. **p-scaling sweep** – varies the number of base features *p* ∈ {3, 4, …, 15}
    at fixed *n* = 200, *k* = 2, *degree* = 2 to show how performance and
    runtime scale with dimensionality.
 
@@ -71,7 +71,7 @@ os.makedirs(_FIG_DIR, exist_ok=True)
 #
 # NOTE: IC-Knock-Poly's runtime grows steeply with *p* (the knockoff SDP
 # scales as O(p² · d²)).  The default sweep fixes p = 5; the p-scaling
-# sweep uses a moderate range (4–10) to show the trend.
+# sweep covers p = 3–15 to show the full dimensionality-scaling trend.
 # ---------------------------------------------------------------------------
 ALL_METHODS = [
     "ic_knock_poly",
@@ -85,8 +85,9 @@ ALL_METHODS = [
 # Fixed dimensionality for default and degree sweeps
 _P = 5
 
-# p-scaling range (kept tractable for the knockoff SDP)
-_P_VALUES = (4, 6, 8, 10)
+# p-scaling range: 3 through 15 (13 data points showing the full scaling trend)
+# Note: p=2 would be skipped by default_configs since k=2 requires k < p.
+_P_VALUES = (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
 
 N_TRIALS = 3   # independent repetitions per configuration
 
@@ -273,7 +274,7 @@ Three complementary sweeps are performed:
         All six competing methods are compared.
   \item \textbf{{p-scaling sweep}}: fixes \(n=200\), \(k=2\), \(d=2\) and
         varies the number of base features
-        \(p \in \{{4, 6, 8, 10\}}\) to show how performance and runtime
+        \(p \in \{{3, 4, \ldots, 15\}}\) to show how performance and runtime
         scale with dimensionality.
   \item \textbf{{Degree\,$\times$\,non-zero sweep}}: fixes \(p={_P}\) and sweeps
         polynomial degree \(d \in \{{2,3,4\}}\) together with the number of
@@ -285,7 +286,7 @@ Three complementary sweeps are performed:
 IC-Knock-Poly's runtime grows steeply with \(p\) because the
 Model-X knockoff construction requires solving a semidefinite programme
 over the \(p \cdot d \times p \cdot d\) polynomial-term covariance matrix.
-The p-scaling sweep therefore uses a moderate range (\(p \leq 10\));
+The p-scaling sweep therefore uses the range \(p \in \{3, \ldots, 15\}\);
 larger \(p\) experiments can be run on more powerful hardware by adjusting
 the parameters in \texttt{{run\_simulations.py}}.
 
