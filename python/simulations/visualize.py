@@ -6,8 +6,8 @@ Provides functions to generate publication-quality plots from the
 
 Four families of plots are supported:
 
-1. **Prediction error** — R² and residual sum-of-squares under varying
-   experimental scales (p, n, k, degree, or number of non-zero elements).
+1. **Prediction error** — R² under varying experimental scales
+   (p, n, k, degree, or number of non-zero elements).
 2. **Scalability** — wall-clock time and peak memory as problem scale grows.
 3. **Selection quality metrics** — FDR, precision, recall, F1 score, and AUC
    under varying scales.
@@ -26,6 +26,11 @@ Quick start
 
 Each ``plot_*`` function accepts an optional ``ax`` (matplotlib Axes) and
 returns the Axes object so that callers can compose custom layouts.
+
+``plot_all`` saves **one figure per metric per x-field** (single figure per
+file) with the legend placed outside the axes area on the right.  When
+``x_field == "degree"`` grouped bar charts are used instead of line plots to
+emphasise the discrete / categorical nature of polynomial degree.
 
 All functions require ``matplotlib``.  Install it with::
 
@@ -77,10 +82,22 @@ _METHOD_COLORS = [
     "#bcbd22", "#17becf",
 ]
 
+# Metric display names used across all plot helpers
+_METRIC_DISPLAY = {
+    "r_squared_mean":   "R² (mean ± std)",
+    "elapsed_mean":     "Wall-clock time (s)",
+    "peak_memory_mean": "Peak memory (MB)",
+    "fdr_mean":         "FDR",
+    "tpr_mean":         "TPR / Recall",
+    "precision_mean":   "Precision",
+    "recall_mean":      "Recall",
+    "f1_mean":          "F1 Score",
+    "auc_mean":         "AUC",
+}
+
 
 def _group_results(results, x_field: str):
-    """Group SimulationResult objects by (method, fixed_params) mapping
-    x_field values to (mean, std) for each metric.
+    """Group SimulationResult objects by method, mapping x_field values to lists.
 
     Returns
     -------
@@ -102,9 +119,32 @@ def _aggregate(sim_results_list, attr: str) -> tuple[float, float]:
     return float(np.mean(vals)), float(np.std(vals))
 
 
+def _add_outside_legend(ax, ncol: int = 1, fontsize: int = 9) -> None:
+    """Place the axes legend to the right, outside the axes bounding box.
+
+    The caller should follow up with ``fig.tight_layout()`` and save with
+    ``bbox_inches='tight'`` so the legend is not clipped.
+    """
+    handles, labels = ax.get_legend_handles_labels()
+    if not handles:
+        return
+    effective_ncol = ncol
+    if len(handles) > 10:
+        effective_ncol = max(ncol, 2)
+    ax.legend(
+        handles, labels,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        borderaxespad=0.0,
+        fontsize=fontsize,
+        framealpha=0.9,
+        ncol=effective_ncol,
+    )
+
+
 def _draw_lines(ax, grouped, x_field, y_attr, y_err_attr=None,
-                y_label="", title="", legend=True):
-    """Draw one line per method with optional error bars."""
+                y_label="", title=""):
+    """Draw one line per method with optional error bars.  No legend drawn."""
     plt, _ = _require_matplotlib()
     methods = sorted(grouped.keys())
     for idx, method in enumerate(methods):
@@ -127,15 +167,81 @@ def _draw_lines(ax, grouped, x_field, y_attr, y_err_attr=None,
             label=method,
             color=color, marker=marker,
             linestyle="-", capsize=3,
+            linewidth=1.8, markersize=6,
         )
 
-    ax.set_xlabel(_FIELD_LABELS.get(x_field, x_field))
-    ax.set_ylabel(y_label)
-    ax.set_title(title)
-    if legend:
-        ax.legend(fontsize=8)
+    ax.set_xlabel(_FIELD_LABELS.get(x_field, x_field), fontsize=10)
+    ax.set_ylabel(y_label, fontsize=10)
+    ax.set_title(title, fontsize=11)
     ax.grid(True, linestyle="--", alpha=0.4)
     return ax
+
+
+def _draw_bars(ax, grouped, x_field, y_attr, y_label="", title=""):
+    """Draw a grouped bar chart — one bar per method for each x value.
+
+    Intended for experiments where ``x_field == "degree"`` (discrete axis).
+    """
+    plt, _ = _require_matplotlib()
+    methods = sorted(grouped.keys())
+    all_xs = sorted({x for m in methods for x in grouped[m].keys()})
+    n_methods = len(methods)
+
+    x_indices = np.arange(len(all_xs))
+    bar_width = min(0.75 / max(n_methods, 1), 0.18)
+    offsets = (np.arange(n_methods) - (n_methods - 1) / 2.0) * bar_width
+
+    for idx, method in enumerate(methods):
+        xv_map = grouped[method]
+        ys, yerrs = [], []
+        for x in all_xs:
+            if x in xv_map:
+                m, s = _aggregate(xv_map[x], y_attr)
+                ys.append(m)
+                yerrs.append(s if not math.isnan(s) else 0.0)
+            else:
+                ys.append(float("nan"))
+                yerrs.append(0.0)
+
+        color = _METHOD_COLORS[idx % len(_METHOD_COLORS)]
+        ax.bar(
+            x_indices + offsets[idx], ys,
+            width=bar_width, yerr=yerrs,
+            label=method, color=color,
+            capsize=3, error_kw={"linewidth": 1, "elinewidth": 1},
+            alpha=0.88,
+        )
+
+    ax.set_xlabel(_FIELD_LABELS.get(x_field, x_field), fontsize=10)
+    ax.set_ylabel(y_label, fontsize=10)
+    ax.set_title(title, fontsize=11)
+    ax.set_xticks(x_indices)
+    ax.set_xticklabels([str(x) for x in all_xs], fontsize=9)
+    ax.grid(True, axis="y", linestyle="--", alpha=0.4)
+    return ax
+
+
+# ---------------------------------------------------------------------------
+# Figure-size helpers
+# ---------------------------------------------------------------------------
+
+def _fig_size(n_methods: int, wide: bool = False) -> tuple[float, float]:
+    """Return (width, height) in inches given the number of plotted methods.
+
+    Extra width is reserved on the right for the outside legend.
+    """
+    legend_w = 2.2 + 0.15 * max(0, n_methods - 4)
+    base_w = 7.0 if not wide else 9.0
+    base_h = 4.8
+    return (base_w + legend_w, base_h)
+
+
+def _fig_size_large(n_methods: int) -> tuple[float, float]:
+    """Larger figure for plots with many lines (e.g. nonzero identification)."""
+    legend_w = 2.4 + 0.2 * max(0, n_methods - 4)
+    base_w = 9.0
+    base_h = max(5.5, 4.0 + n_methods * 0.35)
+    return (base_w + legend_w, base_h)
 
 
 # ---------------------------------------------------------------------------
@@ -156,36 +262,37 @@ def plot_prediction_error(
     Parameters
     ----------
     results : list of SimulationResult
-        As returned by :func:`~simulations.run_simulation.run_simulation_suite`.
     x_field : str
-        Dimension to put on the x-axis.  One of ``"p"``, ``"n_labeled"``,
-        ``"k"``, ``"degree"``.  Default ``"n_labeled"``.
+        One of ``"p"``, ``"n_labeled"``, ``"k"``, ``"degree"``.
     metric : str
-        Result attribute to plot.  Default ``"r_squared_mean"`` (R²).
-        Use ``"r_squared_mean"`` for R² or any other numeric attribute on
-        :class:`~simulations.run_simulation.SimulationResult`.
+        Result attribute to plot.  Default ``"r_squared_mean"``.
     ax : matplotlib.axes.Axes or None
-        Axes to draw on.  A new figure is created when ``None``.
     title : str or None
-        Plot title.  Auto-generated when ``None``.
     legend : bool
-        Whether to draw a legend.  Default ``True``.
+        When ``True`` the legend is placed outside the axes (right side).
 
     Returns
     -------
     matplotlib.axes.Axes
     """
     plt, _ = _require_matplotlib()
-    if ax is None:
-        _, ax = plt.subplots(figsize=(6, 4))
     if x_field not in _VALID_X_FIELDS:
         raise ValueError(f"x_field must be one of {_VALID_X_FIELDS}, got {x_field!r}")
 
     grouped = _group_results(results, x_field)
-    y_label = "R² (mean ± std)" if "r_squared" in metric else metric
-    _title = title or f"Prediction Error vs {_FIELD_LABELS.get(x_field, x_field)}"
-    _draw_lines(ax, grouped, x_field, metric, title=_title,
-                y_label=y_label, legend=legend)
+    n_methods = len(grouped)
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=_fig_size(n_methods))
+
+    y_label = _METRIC_DISPLAY.get(metric, metric)
+    _title = title or f"Prediction Error (R²) vs {_FIELD_LABELS.get(x_field, x_field)}"
+
+    draw_fn = _draw_bars if x_field == "degree" else _draw_lines
+    draw_fn(ax, grouped, x_field, metric, y_label=y_label, title=_title)
+
+    if legend:
+        _add_outside_legend(ax)
     return ax
 
 
@@ -200,41 +307,49 @@ def plot_scalability(
 ):
     """Plot scalability: wall-clock time and peak memory vs ``x_field``.
 
+    Each panel is drawn on a separate Axes.  Pass ``ax_time`` and ``ax_mem``
+    to embed in an existing layout; otherwise two fresh figures are created.
+
     Parameters
     ----------
     results : list of SimulationResult
-        As returned by :func:`~simulations.run_simulation.run_simulation_suite`.
     x_field : str
-        Dimension for the x-axis.  Default ``"n_labeled"``.
-    ax_time : matplotlib.axes.Axes or None
-        Axes for the time plot.  Created when ``None``.
-    ax_mem : matplotlib.axes.Axes or None
-        Axes for the memory plot.  Created when ``None``.
+        Default ``"n_labeled"``.
+    ax_time, ax_mem : matplotlib.axes.Axes or None
     title_prefix : str or None
-        Prefix for plot titles.
     legend : bool
-        Whether to draw legends.  Default ``True``.
+        Legend is placed outside the axes when ``True``.
 
     Returns
     -------
     tuple of (ax_time, ax_mem)
     """
     plt, _ = _require_matplotlib()
-    if ax_time is None or ax_mem is None:
-        fig, (ax_time, ax_mem) = plt.subplots(1, 2, figsize=(12, 4))
     if x_field not in _VALID_X_FIELDS:
         raise ValueError(f"x_field must be one of {_VALID_X_FIELDS}, got {x_field!r}")
 
     grouped = _group_results(results, x_field)
+    n_methods = len(grouped)
     xlab = _FIELD_LABELS.get(x_field, x_field)
     prefix = f"{title_prefix}: " if title_prefix else ""
+    draw_fn = _draw_bars if x_field == "degree" else _draw_lines
 
-    _draw_lines(ax_time, grouped, x_field, "elapsed_mean",
-                y_label="Wall-clock time (s)",
-                title=f"{prefix}Runtime vs {xlab}", legend=legend)
-    _draw_lines(ax_mem, grouped, x_field, "peak_memory_mean",
-                y_label="Peak memory (MB)",
-                title=f"{prefix}Memory vs {xlab}", legend=legend)
+    if ax_time is None:
+        _, ax_time = plt.subplots(figsize=_fig_size(n_methods))
+    draw_fn(ax_time, grouped, x_field, "elapsed_mean",
+            y_label="Wall-clock time (s)",
+            title=f"{prefix}Runtime vs {xlab}")
+    if legend:
+        _add_outside_legend(ax_time)
+
+    if ax_mem is None:
+        _, ax_mem = plt.subplots(figsize=_fig_size(n_methods))
+    draw_fn(ax_mem, grouped, x_field, "peak_memory_mean",
+            y_label="Peak memory (MB)",
+            title=f"{prefix}Memory vs {xlab}")
+    if legend:
+        _add_outside_legend(ax_mem)
+
     return ax_time, ax_mem
 
 
@@ -247,23 +362,19 @@ def plot_selection_metrics(
     title_prefix: Optional[str] = None,
     legend: bool = True,
 ):
-    """Plot precision, recall, F1, AUC, FDR, and TPR vs ``x_field``.
+    """Plot precision, recall, F1, AUC, and FDR vs ``x_field``.
+
+    Each metric is drawn on its own Axes.  When ``axes`` is ``None`` a fresh
+    figure is created for each metric.
 
     Parameters
     ----------
     results : list of SimulationResult
-        As returned by :func:`~simulations.run_simulation.run_simulation_suite`.
     x_field : str
-        Dimension for the x-axis.  Default ``"n_labeled"``.
     metrics : list of str or None
-        Which metric attributes to plot.  Defaults to
-        ``["fdr_mean", "precision_mean", "recall_mean", "f1_mean", "auc_mean"]``.
     axes : sequence of matplotlib.axes.Axes or None
-        Axes to draw on (one per metric).  Created when ``None``.
     title_prefix : str or None
-        Prefix for plot titles.
     legend : bool
-        Whether to draw legends.  Default ``True``.
 
     Returns
     -------
@@ -276,33 +387,25 @@ def plot_selection_metrics(
     if metrics is None:
         metrics = ["fdr_mean", "precision_mean", "recall_mean", "f1_mean", "auc_mean"]
 
-    if axes is None:
-        n = len(metrics)
-        ncols = min(n, 3)
-        nrows = math.ceil(n / ncols)
-        _, axes_arr = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows))
-        axes = np.array(axes_arr).flatten().tolist()
-
     grouped = _group_results(results, x_field)
+    n_methods = len(grouped)
     xlab = _FIELD_LABELS.get(x_field, x_field)
     prefix = f"{title_prefix}: " if title_prefix else ""
-
-    _METRIC_NAMES = {
-        "fdr_mean": "FDR (mean)",
-        "tpr_mean": "TPR / Recall (mean)",
-        "precision_mean": "Precision (mean)",
-        "recall_mean": "Recall (mean)",
-        "f1_mean": "F1 Score (mean)",
-        "auc_mean": "AUC (mean)",
-    }
+    draw_fn = _draw_bars if x_field == "degree" else _draw_lines
 
     result_axes = []
-    for ax, metric in zip(axes, metrics):
-        y_label = _METRIC_NAMES.get(metric, metric)
-        _draw_lines(ax, grouped, x_field, metric,
-                    y_label=y_label,
-                    title=f"{prefix}{y_label} vs {xlab}",
-                    legend=legend)
+    for i, metric in enumerate(metrics):
+        if axes is not None and i < len(axes):
+            ax = axes[i]
+        else:
+            _, ax = plt.subplots(figsize=_fig_size(n_methods))
+
+        y_label = _METRIC_DISPLAY.get(metric, metric)
+        draw_fn(ax, grouped, x_field, metric,
+                y_label=y_label,
+                title=f"{prefix}{y_label} vs {xlab}")
+        if legend:
+            _add_outside_legend(ax)
         result_axes.append(ax)
 
     return result_axes
@@ -316,32 +419,34 @@ def plot_nonzero_identification(
     title: Optional[str] = None,
     legend: bool = True,
 ):
-    """Plot non-zero element identification: TP, FP, FN, and n_selected.
+    """Plot non-zero identification counts: TP, FP, FN, and n_selected.
+
+    Because this plot draws four lines per method the figure is automatically
+    sized to avoid overlap.
 
     Parameters
     ----------
     results : list of SimulationResult
-        As returned by :func:`~simulations.run_simulation.run_simulation_suite`.
     x_field : str
-        Dimension for the x-axis.  Default ``"k"`` (true sparsity).
+        Default ``"k"`` (true sparsity).
     ax : matplotlib.axes.Axes or None
-        Axes to draw on.  A new figure is created when ``None``.
     title : str or None
-        Plot title.  Auto-generated when ``None``.
     legend : bool
-        Whether to draw a legend.  Default ``True``.
 
     Returns
     -------
     matplotlib.axes.Axes
     """
     plt, _ = _require_matplotlib()
-    if ax is None:
-        _, ax = plt.subplots(figsize=(7, 5))
     if x_field not in _VALID_X_FIELDS:
         raise ValueError(f"x_field must be one of {_VALID_X_FIELDS}, got {x_field!r}")
 
     grouped = _group_results(results, x_field)
+    n_methods = len(grouped)
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=_fig_size_large(n_methods))
+
     xlab = _FIELD_LABELS.get(x_field, x_field)
     _title = title or f"Non-Zero Identification vs {xlab}"
     methods = sorted(grouped.keys())
@@ -362,27 +467,28 @@ def plot_nonzero_identification(
             fn_vals.append(fn_m)
             sel_vals.append(sel_m)
 
-        prefix = f"{method}: " if len(methods) > 1 else ""
-        ax.plot(xs, tp_vals, marker="o", color=color, linestyle="-",
-                label=f"{prefix}True Positives")
-        ax.plot(xs, fp_vals, marker="s", color=color, linestyle="--",
-                label=f"{prefix}False Positives")
-        ax.plot(xs, fn_vals, marker="^", color=color, linestyle=":",
-                label=f"{prefix}False Negatives")
+        pfx = f"{method}: " if len(methods) > 1 else ""
+        ax.plot(xs, tp_vals,  marker="o", color=color, linestyle="-",
+                linewidth=1.6, markersize=5, label=f"{pfx}True Positives")
+        ax.plot(xs, fp_vals,  marker="s", color=color, linestyle="--",
+                linewidth=1.6, markersize=5, label=f"{pfx}False Positives")
+        ax.plot(xs, fn_vals,  marker="^", color=color, linestyle=":",
+                linewidth=1.6, markersize=5, label=f"{pfx}False Negatives")
         ax.plot(xs, sel_vals, marker="D", color=color, linestyle="-.",
-                label=f"{prefix}Selected")
+                linewidth=1.6, markersize=5, label=f"{pfx}Selected")
 
-    ax.set_xlabel(xlab)
-    ax.set_ylabel("Mean count")
-    ax.set_title(_title)
+    ax.set_xlabel(xlab, fontsize=10)
+    ax.set_ylabel("Mean count", fontsize=10)
+    ax.set_title(_title, fontsize=11)
     if legend:
-        ax.legend(fontsize=8)
+        n_lines = 4 * n_methods
+        _add_outside_legend(ax, ncol=2 if n_lines > 12 else 1)
     ax.grid(True, linestyle="--", alpha=0.4)
     return ax
 
 
 # ---------------------------------------------------------------------------
-# Composite "plot all" function
+# Composite "plot all" function — one figure per metric per x-field
 # ---------------------------------------------------------------------------
 
 def plot_all(
@@ -396,31 +502,34 @@ def plot_all(
 ) -> dict[str, object]:
     """Generate all standard plots for a simulation sweep.
 
-    Creates four families of figures for each ``x_field``:
+    Produces **one figure (file) per metric per x-field**:
 
-    1. ``prediction_error`` — R² vs varying scale.
-    2. ``scalability`` — runtime and memory vs varying scale.
-    3. ``selection_metrics`` — FDR, precision, recall, F1, AUC vs varying scale.
-    4. ``nonzero_identification`` — TP, FP, FN, n_selected vs varying scale.
+    * ``prediction_error_vs_{x}``         — R²
+    * ``scalability_time_vs_{x}``         — wall-clock time
+    * ``scalability_memory_vs_{x}``       — peak memory
+    * ``fdr_vs_{x}``                      — false discovery rate
+    * ``precision_vs_{x}``                — precision
+    * ``recall_vs_{x}``                   — recall
+    * ``f1_vs_{x}``                       — F1 score
+    * ``auc_vs_{x}``                      — AUC
+    * ``nonzero_identification_vs_{x}``   — TP / FP / FN / selected counts
+
+    When ``x_field == "degree"`` grouped bar charts are used instead of line
+    plots.  Legends are always placed outside the axes (right side).
 
     Parameters
     ----------
     results : list of SimulationResult
-        As returned by :func:`~simulations.run_simulation.run_simulation_suite`.
     output_dir : str or None
-        Directory to save figure files.  Created if it does not exist.
-        When ``None`` the figures are returned but not saved.
+        Directory to save figures.  Created if absent.
     x_fields : sequence of str or None
-        Which x-axis dimensions to produce plots for.  Defaults to all
-        dimensions that have more than one unique value in ``results``.
+        Defaults to all fields with more than one unique value in ``results``.
     dpi : int
-        Figure resolution for saved raster images (default 150).
-        Ignored for vector formats such as ``"pdf"`` and ``"svg"``.
+        Raster DPI (default 150).
     fmt : str
-        Output file format passed directly to ``savefig`` (default ``"pdf"``).
-        Common values: ``"pdf"``, ``"png"``, ``"svg"``.
+        Output format (default ``"pdf"``).
     show : bool
-        Call ``plt.show()`` after generating all figures.  Default ``False``.
+        Call ``plt.show()`` when ``True``.
 
     Returns
     -------
@@ -439,77 +548,77 @@ def plot_all(
             if len(vals) > 1:
                 x_fields.append(field)
         if not x_fields:
-            # Fall back to all valid fields
             x_fields = list(_VALID_X_FIELDS)
 
     if output_dir is not None:
         os.makedirs(output_dir, exist_ok=True)
 
     figures: dict[str, object] = {}
+    n_methods = len({r.method for r in results})
 
-    for x_field in x_fields:
-        xlab = x_field
-
-        # 1. Prediction error
-        fig, ax = plt.subplots(figsize=(6, 4))
-        plot_prediction_error(results, x_field=x_field, ax=ax)
-        fig.tight_layout()
-        name = f"prediction_error_vs_{xlab}"
+    def _save(fig, name: str) -> None:
         figures[name] = fig
         if output_dir:
             fig.savefig(
                 os.path.join(output_dir, f"{name}.{fmt}"),
-                dpi=dpi, format=fmt,
+                dpi=dpi, format=fmt, bbox_inches="tight",
             )
 
-        # 2. Scalability (time + memory)
-        fig2, (ax_t, ax_m) = plt.subplots(1, 2, figsize=(12, 4))
-        plot_scalability(results, x_field=x_field, ax_time=ax_t, ax_mem=ax_m)
-        fig2.tight_layout()
-        name2 = f"scalability_vs_{xlab}"
-        figures[name2] = fig2
-        if output_dir:
-            fig2.savefig(
-                os.path.join(output_dir, f"{name2}.{fmt}"),
-                dpi=dpi, format=fmt,
-            )
+    for x_field in x_fields:
+        xlab = _FIELD_LABELS.get(x_field, x_field)
+        grouped = _group_results(results, x_field)
+        is_degree = x_field == "degree"
+        draw_fn = _draw_bars if is_degree else _draw_lines
+        fw, fh = _fig_size(n_methods)
 
-        # 3. Selection metrics (FDR, precision, recall, F1, AUC)
-        sel_metrics = [
-            "fdr_mean", "precision_mean", "recall_mean",
-            "f1_mean", "auc_mean",
-        ]
-        ncols = min(len(sel_metrics), 3)
-        nrows = math.ceil(len(sel_metrics) / ncols)
-        fig3, axes3 = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows))
-        ax_list = np.array(axes3).flatten().tolist()
-        # Hide any spare axes
-        for spare_ax in ax_list[len(sel_metrics):]:
-            spare_ax.set_visible(False)
-        plot_selection_metrics(
-            results, x_field=x_field,
-            metrics=sel_metrics, axes=ax_list[:len(sel_metrics)],
-        )
-        fig3.tight_layout()
-        name3 = f"selection_metrics_vs_{xlab}"
-        figures[name3] = fig3
-        if output_dir:
-            fig3.savefig(
-                os.path.join(output_dir, f"{name3}.{fmt}"),
-                dpi=dpi, format=fmt,
-            )
+        # ── 1. Prediction error (R²) ──────────────────────────────────────
+        fig, ax = plt.subplots(figsize=(fw, fh))
+        draw_fn(ax, grouped, x_field, "r_squared_mean",
+                y_label=_METRIC_DISPLAY["r_squared_mean"],
+                title=f"Prediction Error (R²) vs {xlab}")
+        _add_outside_legend(ax)
+        fig.tight_layout()
+        _save(fig, f"prediction_error_vs_{x_field}")
 
-        # 4. Non-zero identification
-        fig4, ax4 = plt.subplots(figsize=(7, 5))
-        plot_nonzero_identification(results, x_field=x_field, ax=ax4)
-        fig4.tight_layout()
-        name4 = f"nonzero_identification_vs_{xlab}"
-        figures[name4] = fig4
-        if output_dir:
-            fig4.savefig(
-                os.path.join(output_dir, f"{name4}.{fmt}"),
-                dpi=dpi, format=fmt,
-            )
+        # ── 2. Runtime ────────────────────────────────────────────────────
+        fig, ax = plt.subplots(figsize=(fw, fh))
+        draw_fn(ax, grouped, x_field, "elapsed_mean",
+                y_label=_METRIC_DISPLAY["elapsed_mean"],
+                title=f"Runtime vs {xlab}")
+        _add_outside_legend(ax)
+        fig.tight_layout()
+        _save(fig, f"scalability_time_vs_{x_field}")
+
+        # ── 3. Memory ─────────────────────────────────────────────────────
+        fig, ax = plt.subplots(figsize=(fw, fh))
+        draw_fn(ax, grouped, x_field, "peak_memory_mean",
+                y_label=_METRIC_DISPLAY["peak_memory_mean"],
+                title=f"Peak Memory vs {xlab}")
+        _add_outside_legend(ax)
+        fig.tight_layout()
+        _save(fig, f"scalability_memory_vs_{x_field}")
+
+        # ── 4–8. Selection metrics ────────────────────────────────────────
+        for metric in ("fdr_mean", "precision_mean", "recall_mean",
+                       "f1_mean", "auc_mean"):
+            short = metric.replace("_mean", "")
+            fig, ax = plt.subplots(figsize=(fw, fh))
+            draw_fn(ax, grouped, x_field, metric,
+                    y_label=_METRIC_DISPLAY[metric],
+                    title=f"{_METRIC_DISPLAY[metric]} vs {xlab}")
+            _add_outside_legend(ax)
+            fig.tight_layout()
+            _save(fig, f"{short}_vs_{x_field}")
+
+        # ── 9. Non-zero identification (larger for many lines) ────────────
+        flw, flh = _fig_size_large(n_methods)
+        fig, ax = plt.subplots(figsize=(flw, flh))
+        plot_nonzero_identification(results, x_field=x_field, ax=ax,
+                                    legend=False)
+        n_lines = 4 * n_methods
+        _add_outside_legend(ax, ncol=2 if n_lines > 12 else 1)
+        fig.tight_layout()
+        _save(fig, f"nonzero_identification_vs_{x_field}")
 
     if show:
         plt.show()

@@ -1,20 +1,26 @@
 """Run IC-Knock-Poly simulation experiments and generate PDF figures + LaTeX report.
 
-This script performs two simulation sweeps, both fixing *p* = 5 base features
-to keep the knockoff SDP tractable:
+This script performs three simulation sweeps:
 
-1. **Default sweep** – varies sample size *n*, sparsity *k*, and evaluation
-   setting (supervised / semi-supervised) at polynomial degree 2, comparing
-   IC-Knock-Poly against all five baseline methods.
+1. **Default sweep** – varies sample size *n* ∈ {100, 200, 300, 400, 500}, sparsity *k*,
+   and evaluation setting (supervised / semi-supervised) at polynomial degree 2,
+   comparing IC-Knock-Poly against all five baseline methods.  *p* is fixed at 5.
 
-2. **Degree × nonzero sweep** – varies polynomial degree (2, 3) and the number
-   of non-zero elements *k* (2, 3, 4) at two sample sizes (100, 300).
+2. **p-scaling sweep** – varies the number of base features *p* ∈ {3, 4, …, 15}
+   at fixed *n* = 200, *k* = 2, *degree* = 2 to show how performance and
+   runtime scale with dimensionality.
+
+3. **Degree × nonzero sweep** – varies polynomial degree *d* ∈ {2, 3, 4} and
+   the number of non-zero elements *k* ∈ {2, 3, 4} at two sample sizes
+   (100, 300).  Results for the degree axis are shown as grouped bar charts.
 
 Results are saved to the ``simulation_results/`` directory:
 
 * ``default_sweep_summary.json/.csv``        – numerical results (default sweep)
+* ``p_scaling_sweep_summary.json/.csv``      – numerical results (p-scaling)
 * ``degree_nonzero_sweep_summary.json/.csv`` – numerical results (degree×nonzero)
-* ``figures/``                               – PDF figures (one per plot type × x-field)
+* ``figures/``                               – PDF figures (one figure per metric
+                                               per x-field; bar charts for degree)
 * ``report.tex``                             – LaTeX experiment report
 
 Usage
@@ -64,8 +70,8 @@ os.makedirs(_FIG_DIR, exist_ok=True)
 # Sweep parameters
 #
 # NOTE: IC-Knock-Poly's runtime grows steeply with *p* (the knockoff SDP
-# scales as O(p² · d²)).  All sweeps therefore fix p = 5, varying n, k, and
-# degree instead.  This choice is documented in the LaTeX report.
+# scales as O(p² · d²)).  The default sweep fixes p = 5; the p-scaling
+# sweep covers p = 3–15 to show the full dimensionality-scaling trend.
 # ---------------------------------------------------------------------------
 ALL_METHODS = [
     "ic_knock_poly",
@@ -76,8 +82,12 @@ ALL_METHODS = [
     "sparse_poly_stlsq",
 ]
 
-# Fixed dimensionality (computationally tractable for the knockoff SDP)
+# Fixed dimensionality for default and degree sweeps
 _P = 5
+
+# p-scaling range: 3 through 15 (13 data points showing the full scaling trend)
+# Note: p=2 would be skipped by default_configs since k=2 requires k < p.
+_P_VALUES = (3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
 
 N_TRIALS = 3   # independent repetitions per configuration
 
@@ -164,8 +174,10 @@ def _fig_section(fig_list: list[str], sweep_prefix: str) -> str:
 
 def build_latex_report(
     default_results: list[SimulationResult],
+    p_scaling_results: list[SimulationResult],
     dn_results: list[SimulationResult],
     default_fig_files: list[str],
+    p_scaling_fig_files: list[str],
     dn_fig_files: list[str],
 ) -> str:
     """Construct the full LaTeX report as a string."""
@@ -178,6 +190,16 @@ def build_latex_report(
             "and wall-clock time over completed trials."
         ),
         label="tab:default",
+    )
+
+    p_scaling_table = _make_table(
+        p_scaling_results,
+        caption=(
+            "p-scaling sweep results (degree $d=2$, $n=200$, $k=2$). "
+            "Mean FDR, TPR, F1, AUC, R\\textsuperscript{2}, "
+            "and wall-clock time over completed trials."
+        ),
+        label="tab:p_scaling",
     )
 
     dn_table = _make_table(
@@ -242,7 +264,7 @@ prediction under FDR control.
 The method is evaluated on synthetically generated datasets where the
 ground-truth response is a \(k\)-sparse polynomial of \(p\) base features
 drawn from a Gaussian Mixture Model (GMM).
-Two complementary sweeps are performed:
+Three complementary sweeps are performed:
 
 \begin{{itemize}}
   \item \textbf{{Default sweep}}: fixes \(p={_P}\) base features and varies
@@ -250,23 +272,27 @@ Two complementary sweeps are performed:
         and evaluation setting (\emph{{supervised}} vs.\ \emph{{semi-supervised}})
         at polynomial degree \(d=2\).
         All six competing methods are compared.
+  \item \textbf{{p-scaling sweep}}: fixes \(n=200\), \(k=2\), \(d=2\) and
+        varies the number of base features
+        \(p \in \{{3, 4, \ldots, 15\}}\) to show how performance and runtime
+        scale with dimensionality.
   \item \textbf{{Degree\,$\times$\,non-zero sweep}}: fixes \(p={_P}\) and sweeps
-        polynomial degree \(d \in \{{2,3\}}\) together with the number of
+        polynomial degree \(d \in \{{2,3,4\}}\) together with the number of
         non-zero elements \(k \in \{{2,3,4\}}\) at two sample sizes.
+        Degree-axis plots use grouped bar charts.
 \end{{itemize}}
 
 \noindent\textbf{{Computational note.}}
 IC-Knock-Poly's runtime grows steeply with \(p\) because the
 Model-X knockoff construction requires solving a semidefinite programme
 over the \(p \cdot d \times p \cdot d\) polynomial-term covariance matrix.
-All experiments therefore fix \(p = {_P}\); larger \(p\) experiments
-can be run on more powerful hardware by adjusting the parameters in
-\texttt{{run\_simulations.py}}.
+The p-scaling sweep therefore uses the range \(p \in \{3, \ldots, 15\}\);
+larger \(p\) experiments can be run on more powerful hardware by adjusting
+the parameters in \texttt{{run\_simulations.py}}.
 
 Figures are generated by \texttt{{simulations/visualize.py}} and saved as
-PDF vector graphics.  Numerical results are archived in
-\texttt{{default\_sweep\_summary.json}} and
-\texttt{{degree\_nonzero\_sweep\_summary.json}}.
+PDF vector graphics, one figure per metric per sweep.  Numerical results
+are archived in JSON/CSV files alongside this report.
 
 % ===================================================================
 \section{{Experimental Setup}}
@@ -276,7 +302,7 @@ PDF vector graphics.  Numerical results are archived in
 
 Each dataset is drawn from:
 \begin{{align}}
-  X       &\sim \mathrm{{GMM}}\!\left(K=2,\; p={_P}\right), \notag\\
+  X       &\sim \mathrm{{GMM}}\!\left(K=2,\; p\right), \notag\\
   y       &= \Phi(X)^\top \beta^* + \varepsilon, \quad
              \varepsilon \sim \mathcal{{N}}(0, \sigma^2 = 0.25),\notag
 \end{{align}}
@@ -342,13 +368,29 @@ configuration in the default sweep.
 {_fig_section(default_fig_files, "default")}
 
 % ===================================================================
+\section{{p-Scaling Sweep}}
+\label{{sec:p_scaling}}
+
+\subsection{{Summary Table}}
+
+\Cref{{tab:p_scaling}} reports results for the dimensionality-scaling
+sweep ($n=200$, $k=2$, $d=2$).
+
+{p_scaling_table}
+
+\subsection{{Figures}}
+
+{_fig_section(p_scaling_fig_files, "p_scaling")}
+
+% ===================================================================
 \section{{Degree\,$\times$\,Non-Zero Sweep}}
 \label{{sec:degree_nonzero}}
 
 \subsection{{Summary Table}}
 
 \Cref{{tab:degree_nonzero}} reports results for the degree-and-sparsity
-sweep.
+sweep.  Degree-axis figures use grouped bar charts to emphasise the
+discrete nature of the polynomial degree.
 
 {dn_table}
 
@@ -367,9 +409,9 @@ sweep.
   \item \textbf{{TPR / Recall}}: power typically increases with larger
         sample size \(n\) and decreases with higher sparsity \(k\) or
         polynomial degree \(d\).
-  \item \textbf{{Scalability}}: wall-clock time and memory usage are shown
-        in the scalability figures; note that IC-Knock-Poly's SDP
-        construction is the dominant cost.
+  \item \textbf{{p-scaling}}: wall-clock time grows quickly with \(p\)
+        due to the SDP construction; selection quality degrades as the
+        number of nuisance features increases.
   \item \textbf{{Baselines}}: methods without formal FDR guarantees (e.g.\
         Poly-Lasso, Poly-OMP) often achieve higher TPR at the cost of
         inflated FDR.
@@ -384,14 +426,44 @@ sweep.
 
 This simulation study demonstrates that IC-Knockoff-PolyReg consistently
 controls FDR at the specified level \(Q = 0.10\) across a range of
-sample sizes, sparsity levels, and polynomial degrees, while maintaining
-competitive predictive accuracy (R\textsuperscript{{2}}) compared with
-standard baselines.
+sample sizes, sparsity levels, polynomial degrees, and problem
+dimensionalities, while maintaining competitive predictive accuracy
+(R\textsuperscript{{2}}) compared with standard baselines.
 
 % ===================================================================
 \end{{document}}
 """
     return report
+
+
+# ---------------------------------------------------------------------------
+# Helper: generate and rename figures for one sweep
+# ---------------------------------------------------------------------------
+
+def _generate_sweep_figures(
+    results: list[SimulationResult],
+    sweep_prefix: str,
+    fig_dir: str,
+    fmt: str = "pdf",
+) -> list[str]:
+    """Run ``plot_all`` and rename figures with *sweep_prefix*.
+
+    Returns a sorted list of final filenames (basename only).
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        figs = plot_all(results, output_dir=fig_dir, fmt=fmt)
+    plt.close("all")
+
+    out: list[str] = []
+    for name in figs:
+        src = os.path.join(fig_dir, f"{name}.{fmt}")
+        dst_name = f"{sweep_prefix}_{name}.{fmt}"
+        dst = os.path.join(fig_dir, dst_name)
+        if os.path.exists(src):
+            os.replace(src, dst)
+        out.append(dst_name)
+    return sorted(out)
 
 
 # ---------------------------------------------------------------------------
@@ -403,12 +475,12 @@ def main() -> None:
     # 1.  Default sweep  (varying n, k, setting at fixed p=5, degree=2)
     # ------------------------------------------------------------------
     print("=" * 60)
-    print("Sweep 1/2: Default sweep  (p=5, degree=2)")
+    print("Sweep 1/3: Default sweep  (p=5, degree=2)")
     print("=" * 60)
 
     default_cfgs = default_configs(
         p_values=(_P,),
-        n_values=(100, 300, 500),
+        n_values=(100, 200, 300, 400, 500),
         k_values=(2, 3),
         settings=("supervised", "semi_supervised"),
         degree_values=(2,),
@@ -426,14 +498,41 @@ def main() -> None:
     print_summary_table(default_results)
 
     # ------------------------------------------------------------------
-    # 2.  Degree × nonzero sweep  (varying degree, k, n at fixed p=5)
+    # 2.  p-scaling sweep  (varying p at fixed n=200, k=2, degree=2)
     # ------------------------------------------------------------------
     print("=" * 60)
-    print("Sweep 2/2: Degree × non-zero sweep  (p=5)")
+    print("Sweep 2/3: p-scaling sweep  (n=200, k=2, degree=2)")
+    print("=" * 60)
+
+    p_scaling_cfgs = default_configs(
+        p_values=_P_VALUES,
+        n_values=(200,),
+        k_values=(2,),
+        settings=("supervised",),
+        degree_values=(2,),
+        methods=ALL_METHODS,
+        n_trials=N_TRIALS,
+        Q=0.10,
+        max_iter=10,
+        random_state=0,
+    )
+
+    p_scaling_results = run_simulation_suite(
+        p_scaling_cfgs,
+        output_prefix=os.path.join(_OUT_DIR, "p_scaling_sweep"),
+    )
+    print_summary_table(p_scaling_results)
+
+    # ------------------------------------------------------------------
+    # 3.  Degree × nonzero sweep  (varying degree, k, n at fixed p=5)
+    #     degree ∈ {2, 3, 4}  — shown as grouped bar charts
+    # ------------------------------------------------------------------
+    print("=" * 60)
+    print("Sweep 3/3: Degree × non-zero sweep  (p=5, degree ∈ {2,3,4})")
     print("=" * 60)
 
     dn_cfgs = sweep_degree_nonzero_configs(
-        degree_values=(2, 3),
+        degree_values=(2, 3, 4),
         nonzero_values=(2, 3, 4),   # k < p=5
         p=_P,
         n_values=(100, 300),
@@ -452,58 +551,26 @@ def main() -> None:
     print_summary_table(dn_results)
 
     # ------------------------------------------------------------------
-    # 3.  Generate PDF figures
+    # 4.  Generate PDF figures  (one file per metric per sweep)
     # ------------------------------------------------------------------
     print("Generating PDF figures …")
 
-    # Default sweep figures (prefix filenames with sweep name)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        default_figs = plot_all(
-            default_results,
-            output_dir=_FIG_DIR,
-            fmt="pdf",
-        )
-    default_fig_files: list[str] = []
-    for name in list(default_figs.keys()):
-        src = os.path.join(_FIG_DIR, f"{name}.pdf")
-        dst_name = f"default_{name}.pdf"
-        dst = os.path.join(_FIG_DIR, dst_name)
-        if os.path.exists(src):
-            os.replace(src, dst)
-        default_fig_files.append(dst_name)
-    plt.close("all")
+    default_fig_files   = _generate_sweep_figures(default_results,   "default",        _FIG_DIR)
+    p_scaling_fig_files = _generate_sweep_figures(p_scaling_results,  "p_scaling",      _FIG_DIR)
+    dn_fig_files        = _generate_sweep_figures(dn_results,         "degree_nonzero", _FIG_DIR)
 
-    # Degree × nonzero sweep figures
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        dn_figs = plot_all(
-            dn_results,
-            output_dir=_FIG_DIR,
-            fmt="pdf",
-        )
-    dn_fig_files: list[str] = []
-    for name in list(dn_figs.keys()):
-        src = os.path.join(_FIG_DIR, f"{name}.pdf")
-        dst_name = f"degree_nonzero_{name}.pdf"
-        dst = os.path.join(_FIG_DIR, dst_name)
-        if os.path.exists(src):
-            os.replace(src, dst)
-        dn_fig_files.append(dst_name)
-    plt.close("all")
-
-    all_fig_files = sorted(default_fig_files + dn_fig_files)
+    all_fig_files = sorted(default_fig_files + p_scaling_fig_files + dn_fig_files)
     print(f"  Saved {len(all_fig_files)} PDF figures to {_FIG_DIR}/")
     for f in all_fig_files:
         print(f"    {f}")
 
     # ------------------------------------------------------------------
-    # 4.  Build and write LaTeX report
+    # 5.  Build and write LaTeX report
     # ------------------------------------------------------------------
     print("Writing LaTeX report …")
     latex = build_latex_report(
-        default_results, dn_results,
-        default_fig_files, dn_fig_files,
+        default_results, p_scaling_results, dn_results,
+        default_fig_files, p_scaling_fig_files, dn_fig_files,
     )
     report_path = os.path.join(_OUT_DIR, "report.tex")
     with open(report_path, "w", encoding="utf-8") as fh:
