@@ -666,6 +666,7 @@ def default_configs(
                         )
     return configs
 
+
 def sweep_degree_nonzero_configs(
     degree_values: tuple[int, ...] = (2, 3),
     nonzero_values: tuple[int, ...] = (5, 10, 15, 20),

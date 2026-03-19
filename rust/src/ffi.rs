@@ -316,8 +316,6 @@ unsafe fn fill_baseline_outputs(
 ///
 /// # Safety
 /// All pointer arguments must be non-null and point to sufficient memory.
-
-/// All pointer arguments must be non-null and point to sufficient memory.
 #[no_mangle]
 pub unsafe extern "C" fn ic_baseline_poly_lasso_fit(
     x_flat: *const f64,
