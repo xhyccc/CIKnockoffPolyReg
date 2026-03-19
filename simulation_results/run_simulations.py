@@ -288,7 +288,7 @@ Three complementary sweeps are performed:
 IC-Knock-Poly's runtime grows steeply with \(p\) because the
 Model-X knockoff construction requires solving a semidefinite programme
 over the \(p \cdot d \times p \cdot d\) polynomial-term covariance matrix.
-The p-scaling sweep therefore uses the range \(p \in \{3, \ldots, 15\}\);
+The p-scaling sweep therefore uses the range \(p \in \{{3, \ldots, 15\}}\);
 larger \(p\) experiments can be run on more powerful hardware by adjusting
 the parameters in \texttt{{run\_simulations.py}}.
 
