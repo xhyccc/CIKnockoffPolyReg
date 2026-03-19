@@ -22,6 +22,7 @@
 use std::collections::HashSet;
 use std::slice;
 
+use crate::baselines::{PolyLasso, PolyOMP, PolySTLSQ};
 use crate::knockoffs::{compute_w_statistics, equicorrelated_s_values, sample_gaussian_knockoffs};
 use crate::matrix::Matrix;
 use crate::polynomial::{n_expanded_features, polynomial_expand};
@@ -260,4 +261,222 @@ pub unsafe extern "C" fn ic_knockoff_threshold(
     }
 
     knockoff_threshold(w, q_t, &active, offset as i64)
+}
+
+// ---------------------------------------------------------------------------
+// Baseline FFI helpers
+// ---------------------------------------------------------------------------
+
+/// Internal: fill output buffers from a fitted baseline model.
+///
+/// # Safety
+/// `out_coef`, `out_base_indices`, and `out_exponents` must each point to
+/// `n_cols` valid writable elements.  `out_intercept` must be a valid pointer.
+unsafe fn fill_baseline_outputs(
+    coef: &[f64],
+    intercept: f64,
+    exp: &crate::polynomial::ExpandedFeatures,
+    out_coef: *mut f64,
+    out_intercept: *mut f64,
+    out_base_indices: *mut i32,
+    out_exponents: *mut i32,
+) -> i32 {
+    let n_cols = coef.len();
+    let out_c = slice::from_raw_parts_mut(out_coef, n_cols);
+    let out_bi = slice::from_raw_parts_mut(out_base_indices, n_cols);
+    let out_ex = slice::from_raw_parts_mut(out_exponents, n_cols);
+
+    let mut n_selected = 0i32;
+    for j in 0..n_cols {
+        out_c[j] = coef[j];
+        if coef[j] != 0.0 {
+            n_selected += 1;
+        }
+        out_bi[j] = exp.info[j].base_feature_index as i32;
+        out_ex[j] = exp.info[j].exponent;
+    }
+    *out_intercept = intercept;
+    n_selected
+}
+
+// ---------------------------------------------------------------------------
+// PolyLasso baseline
+// ---------------------------------------------------------------------------
+
+/// Fit PolyLasso on X (n×p), y (n), polynomial degree.
+///
+/// Caller must pre-allocate buffers of size `ic_poly_n_expanded(p, degree, 1)`:
+/// - `out_coef`:          expanded coefficients (zero for unselected terms)
+/// - `out_base_indices`:  base-feature index per expanded column
+/// - `out_exponents`:     exponent per expanded column
+///
+/// `out_intercept` must point to one writable `f64`.
+///
+/// Returns the number of selected (non-zero coefficient) terms, or -1 on error.
+///
+/// # Safety
+/// All pointer arguments must be non-null and point to sufficient memory.
+
+/// All pointer arguments must be non-null and point to sufficient memory.
+#[no_mangle]
+pub unsafe extern "C" fn ic_baseline_poly_lasso_fit(
+    x_flat: *const f64,
+    y_flat: *const f64,
+    n: i32,
+    p: i32,
+    degree: i32,
+    out_coef: *mut f64,
+    out_intercept: *mut f64,
+    out_base_indices: *mut i32,
+    out_exponents: *mut i32,
+) -> i32 {
+    if x_flat.is_null()
+        || y_flat.is_null()
+        || out_coef.is_null()
+        || out_intercept.is_null()
+        || out_base_indices.is_null()
+        || out_exponents.is_null()
+    {
+        return -1;
+    }
+    let x = matrix_from_raw(x_flat, n as usize, p as usize);
+    let y = slice::from_raw_parts(y_flat, n as usize);
+
+    let mut model = PolyLasso::new(degree as u32);
+    model.fit(&x, y);
+
+    let exp = match &model.exp_ {
+        Some(e) => e,
+        None => return -1,
+    };
+    fill_baseline_outputs(
+        &model.coef_,
+        model.intercept_,
+        exp,
+        out_coef,
+        out_intercept,
+        out_base_indices,
+        out_exponents,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// PolyOMP baseline
+// ---------------------------------------------------------------------------
+
+/// Fit PolyOMP on X (n×p), y (n), polynomial degree.
+///
+/// `max_nonzero`: maximum non-zero terms (0 → automatic).
+///
+/// Caller must pre-allocate buffers of size `ic_poly_n_expanded(p, degree, 1)`.
+/// Returns n_selected or -1 on error.
+///
+/// # Safety
+/// All pointer arguments must be non-null and point to sufficient memory.
+#[no_mangle]
+pub unsafe extern "C" fn ic_baseline_poly_omp_fit(
+    x_flat: *const f64,
+    y_flat: *const f64,
+    n: i32,
+    p: i32,
+    degree: i32,
+    max_nonzero: i32,
+    out_coef: *mut f64,
+    out_intercept: *mut f64,
+    out_base_indices: *mut i32,
+    out_exponents: *mut i32,
+) -> i32 {
+    if x_flat.is_null()
+        || y_flat.is_null()
+        || out_coef.is_null()
+        || out_intercept.is_null()
+        || out_base_indices.is_null()
+        || out_exponents.is_null()
+    {
+        return -1;
+    }
+    let x = matrix_from_raw(x_flat, n as usize, p as usize);
+    let y = slice::from_raw_parts(y_flat, n as usize);
+
+    let mut model = PolyOMP::new(degree as u32);
+    model.max_nonzero = max_nonzero as usize;
+    model.fit(&x, y);
+
+    let exp = match &model.exp_ {
+        Some(e) => e,
+        None => return -1,
+    };
+    fill_baseline_outputs(
+        &model.coef_,
+        model.intercept_,
+        exp,
+        out_coef,
+        out_intercept,
+        out_base_indices,
+        out_exponents,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// PolySTLSQ baseline
+// ---------------------------------------------------------------------------
+
+/// Fit PolySTLSQ (Sequential Thresholded Least Squares) on X (n×p), y (n), degree.
+///
+/// `threshold`: pruning threshold (< 0 → automatic, default 0.1 × max|β₀|).
+///
+/// Caller must pre-allocate buffers of size `ic_poly_n_expanded(p, degree, 1)`.
+/// Returns n_selected or -1 on error.
+///
+/// # Safety
+/// All pointer arguments must be non-null and point to sufficient memory.
+#[no_mangle]
+pub unsafe extern "C" fn ic_baseline_poly_stlsq_fit(
+    x_flat: *const f64,
+    y_flat: *const f64,
+    n: i32,
+    p: i32,
+    degree: i32,
+    threshold: f64,
+    out_coef: *mut f64,
+    out_intercept: *mut f64,
+    out_base_indices: *mut i32,
+    out_exponents: *mut i32,
+) -> i32 {
+    if x_flat.is_null()
+        || y_flat.is_null()
+        || out_coef.is_null()
+        || out_intercept.is_null()
+        || out_base_indices.is_null()
+        || out_exponents.is_null()
+    {
+        return -1;
+    }
+    let x = matrix_from_raw(x_flat, n as usize, p as usize);
+    let y = slice::from_raw_parts(y_flat, n as usize);
+
+    let mut model = PolySTLSQ::new(degree as u32);
+    model.threshold = threshold;
+    model.fit(&x, y);
+
+    let exp = match &model.exp_ {
+        Some(e) => e,
+        None => return -1,
+    };
+    // For STLSQ, mask coef by active_ before exporting
+    let coef_masked: Vec<f64> = model
+        .coef_
+        .iter()
+        .zip(model.active_.iter())
+        .map(|(&c, &a)| if a { c } else { 0.0 })
+        .collect();
+    fill_baseline_outputs(
+        &coef_masked,
+        model.intercept_,
+        exp,
+        out_coef,
+        out_intercept,
+        out_base_indices,
+        out_exponents,
+    )
 }

@@ -1,6 +1,7 @@
 """Run IC-Knock-Poly simulation experiments and generate PDF figures + LaTeX report.
 
-This script performs three simulation sweeps:
+This script performs three simulation sweeps, all using the **Rust kernel**
+for scalability (IC-Knock-Poly and the three Rust-backed baselines).
 
 1. **Default sweep** – varies sample size *n* ∈ {100, 200, 300, 400, 500}, sparsity *k*,
    and evaluation setting (supervised / semi-supervised) at polynomial degree 2,
@@ -8,11 +9,18 @@ This script performs three simulation sweeps:
 
 2. **p-scaling sweep** – varies the number of base features *p* ∈ {3, 4, …, 15}
    at fixed *n* = 200, *k* = 2, *degree* = 2 to show how performance and
-   runtime scale with dimensionality.
+   runtime scale with dimensionality.  This sweep is key for evaluating
+   how each method scales as the problem dimension grows.
 
 3. **Degree × nonzero sweep** – varies polynomial degree *d* ∈ {2, 3, 4} and
    the number of non-zero elements *k* ∈ {2, 3, 4} at two sample sizes
    (100, 300).  Results for the degree axis are shown as grouped bar charts.
+
+All sweeps use ``backend="rust"`` so that IC-Knock-Poly's polynomial expansion,
+W-statistics, and PoSI threshold run on the compiled Rust kernel, and the
+three baseline algorithms (Poly-Lasso, Poly-OMP, Sparse-Poly-STLSQ) also
+execute their Rust implementations for consistency.  Poly-CLIME and
+Poly-Knockoff fall back to Python as they do not yet have Rust equivalents.
 
 Results are saved to the ``simulation_results/`` directory:
 
@@ -29,7 +37,10 @@ Usage
 
     python simulation_results/run_simulations.py
 
-Run from the **repository root**.
+Run from the **repository root**.  The Rust shared library must be compiled
+first::
+
+    cd rust && cargo build --release
 """
 
 from __future__ import annotations
@@ -72,6 +83,8 @@ os.makedirs(_FIG_DIR, exist_ok=True)
 # NOTE: IC-Knock-Poly's runtime grows steeply with *p* (the knockoff SDP
 # scales as O(p² · d²)).  The default sweep fixes p = 5; the p-scaling
 # sweep covers p = 3–15 to show the full dimensionality-scaling trend.
+#
+# All sweeps use the Rust kernel (backend="rust") for scalability.
 # ---------------------------------------------------------------------------
 ALL_METHODS = [
     "ic_knock_poly",
@@ -81,6 +94,9 @@ ALL_METHODS = [
     "poly_knockoff",
     "sparse_poly_stlsq",
 ]
+
+# Computational backend — Rust for all experiments
+BACKEND = "rust"
 
 # Fixed dimensionality for default and degree sweeps
 _P = 5
@@ -277,7 +293,8 @@ Three complementary sweeps are performed:
   \item \textbf{{p-scaling sweep}}: fixes \(n=200\), \(k=2\), \(d=2\) and
         varies the number of base features
         \(p \in \{{3, 4, \ldots, 15\}}\) to show how performance and runtime
-        scale with dimensionality.
+        scale with dimensionality.  This sweep is central to the scalability
+        analysis enabled by the Rust kernel.
   \item \textbf{{Degree\,$\times$\,non-zero sweep}}: fixes \(p={_P}\) and sweeps
         polynomial degree \(d \in \{{2,3,4\}}\) together with the number of
         non-zero elements \(k \in \{{2,3,4\}}\) at two sample sizes.
@@ -285,10 +302,17 @@ Three complementary sweeps are performed:
 \end{{itemize}}
 
 \noindent\textbf{{Computational note.}}
+All experiments use the \textbf{{Rust kernel}} (\texttt{{backend="rust"}}):
+IC-Knock-Poly's polynomial expansion, W-statistics, and PoSI threshold run
+via the compiled Rust cdylib, and the three baseline algorithms (Poly-Lasso,
+Poly-OMP, Sparse-Poly-STLSQ) also execute their Rust implementations for
+consistency and speed.  Poly-CLIME and Poly-Knockoff continue to use Python
+as they do not yet have Rust equivalents.
+
 IC-Knock-Poly's runtime grows steeply with \(p\) because the
 Model-X knockoff construction requires solving a semidefinite programme
 over the \(p \cdot d \times p \cdot d\) polynomial-term covariance matrix.
-The p-scaling sweep therefore uses the range \(p \in \{{3, \ldots, 15\}}\);
+The p-scaling sweep uses the range \(p \in \{{3, \ldots, 15\}}\);
 larger \(p\) experiments can be run on more powerful hardware by adjusting
 the parameters in \texttt{{run\_simulations.py}}.
 
@@ -475,6 +499,8 @@ def _generate_sweep_figures(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    print(f"All sweeps will use backend='{BACKEND}' for scalability.")
+
     # ------------------------------------------------------------------
     # 1.  Default sweep  (varying n, k, setting at fixed p=5, degree=2)
     # ------------------------------------------------------------------
@@ -493,6 +519,7 @@ def main() -> None:
         Q=0.10,
         max_iter=10,
         random_state=0,
+        backend=BACKEND,
     )
 
     default_results = run_simulation_suite(
@@ -503,6 +530,7 @@ def main() -> None:
 
     # ------------------------------------------------------------------
     # 2.  p-scaling sweep  (varying p at fixed n=200, k=2, degree=2)
+    #     This sweep demonstrates how methods scale with dimensionality p.
     # ------------------------------------------------------------------
     print("=" * 60)
     print("Sweep 2/3: p-scaling sweep  (n=200, k=2, degree=2)")
@@ -519,6 +547,7 @@ def main() -> None:
         Q=0.10,
         max_iter=10,
         random_state=0,
+        backend=BACKEND,
     )
 
     p_scaling_results = run_simulation_suite(
@@ -546,6 +575,7 @@ def main() -> None:
         Q=0.10,
         max_iter=10,
         random_state=0,
+        backend=BACKEND,
     )
 
     dn_results = run_simulation_suite(

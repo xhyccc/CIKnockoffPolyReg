@@ -132,6 +132,7 @@ class SimulationConfig:
     max_iter: int = 10
     random_state: Optional[int] = 0
     label: str = ""
+    backend: str = "rust"
 
     def __post_init__(self):
         if not self.label:
@@ -406,6 +407,7 @@ def run_simulation(config: SimulationConfig) -> list[SimulationResult]:
                     max_iter=config.max_iter,
                     random_state=seed,
                     methods=config.methods,
+                    backend=config.backend,
                 )
         except Exception as exc:  # noqa: BLE001 – KeyboardInterrupt/SystemExit are BaseException, not caught here
             print(
@@ -586,6 +588,7 @@ def default_configs(
     Q: float = 0.10,
     max_iter: int = 10,
     random_state: int = 0,
+    backend: str = "rust",
 ) -> list[SimulationConfig]:
     """Build the default simulation sweep configurations.
 
@@ -622,6 +625,8 @@ def default_configs(
         Maximum IC-Knock-Poly iterations (default 10).
     random_state : int
         Base random seed (default 0).
+    backend : str
+        Computational kernel for all methods (default ``"rust"``).
 
     Returns
     -------
@@ -656,10 +661,10 @@ def default_configs(
                                 methods=list(methods),
                                 max_iter=max_iter,
                                 random_state=random_state,
+                                backend=backend,
                             )
                         )
     return configs
-
 
 def sweep_degree_nonzero_configs(
     degree_values: tuple[int, ...] = (2, 3),
@@ -672,6 +677,7 @@ def sweep_degree_nonzero_configs(
     Q: float = 0.10,
     max_iter: int = 10,
     random_state: int = 0,
+    backend: str = "rust",
 ) -> list[SimulationConfig]:
     """Build sweep configurations for polynomial degree and non-zero elements.
 
@@ -705,6 +711,8 @@ def sweep_degree_nonzero_configs(
         Maximum IC-Knock-Poly iterations (default 10).
     random_state : int
         Base random seed (default 0).
+    backend : str
+        Computational kernel for all methods (default ``"rust"``).
 
     Returns
     -------
@@ -734,9 +742,11 @@ def sweep_degree_nonzero_configs(
                             methods=list(methods),
                             max_iter=max_iter,
                             random_state=random_state,
+                            backend=backend,
                         )
                     )
     return configs
+
 
 def print_summary_table(results: list[SimulationResult]) -> None:
     """Print a formatted summary table of simulation results.
@@ -862,6 +872,12 @@ def _cli() -> None:
         help="Output prefix for JSON/CSV files (default: no file output)",
     )
     parser.add_argument(
+        "--backend",
+        default="rust",
+        choices=["python", "cpp", "rust"],
+        help="Kernel backend (default: rust)",
+    )
+    parser.add_argument(
         "--plot", action="store_true",
         help=(
             "Generate visualisation plots after the sweep.  Requires "
@@ -883,6 +899,7 @@ def _cli() -> None:
             Q=args.Q,
             max_iter=args.max_iter,
             random_state=args.seed,
+            backend=args.backend,
         )
     else:
         configs = default_configs(
@@ -896,6 +913,7 @@ def _cli() -> None:
             Q=args.Q,
             max_iter=args.max_iter,
             random_state=args.seed,
+            backend=args.backend,
         )
 
     print(f"Running {len(configs)} simulation configuration(s) …\n")
