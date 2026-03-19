@@ -262,8 +262,10 @@ dictionary regression to perform simultaneous feature selection and
 prediction under FDR control.
 
 The method is evaluated on synthetically generated datasets where the
-ground-truth response is a \(k\)-sparse polynomial of \(p\) base features
-drawn from a Gaussian Mixture Model (GMM).
+ground-truth response depends on \(k\) non-zero **polynomial terms** chosen
+uniformly at random from a dictionary of \(2dp\) terms built over \(p\) base
+features drawn from a Gaussian Mixture Model (GMM).  Here \(k\) counts
+dictionary columns (polynomial terms), not base features.
 Three complementary sweeps are performed:
 
 \begin{{itemize}}
@@ -308,8 +310,10 @@ Each dataset is drawn from:
 \end{{align}}
 where \(\Phi(\cdot)\) is the rational polynomial dictionary of degree \(d\)
 (terms \(x_j^1, x_j^2, \ldots, x_j^d, x_j^{{-1}}, \ldots, x_j^{{-d}}\) for
-each base feature \(x_j\)), and \(\beta^*\) is \(k\)-sparse with non-zero
+each base feature \(x_j\)), and \(\beta^*\) has exactly \(k\) non-zero entries
+chosen uniformly at random from the \(2dp\) dictionary columns, with
 coefficients drawn uniformly from \([-2,-0.5]\cup[0.5,2]\).
+Here \(k\) counts \emph{{polynomial terms}}, not base features.
 
 \subsection{{Competing Methods}}
 

@@ -9,9 +9,10 @@ The polynomial dictionary Φ(·) is the same rational polynomial dictionary
 used by the main IC-Knock-Poly algorithm: each base feature x_j contributes
 terms x_j^1, x_j^2, …, x_j^d, x_j^{-1}, …, x_j^{-d}.
 
-The ground-truth signal is constructed so that the *base feature indices*
-that appear in β* are exactly those in ``true_base_indices``.  This allows
-the evaluation code to report FDR and TPR at the base-feature level.
+Here *k* counts **polynomial terms** (dictionary columns), not base features.
+``true_base_indices`` is derived as the set of base features that appear in
+the k randomly chosen terms, allowing the evaluation code to report FDR and
+TPR at the base-feature level.
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ class SimulatedDataset:
     p : int
         Number of base features.
     k : int
-        Sparsity (number of non-zero base features in β*).
+        Sparsity (number of non-zero polynomial terms in β*).
     degree : int
         Maximum polynomial degree used when constructing the response.
     gmm_n_components : int
@@ -180,11 +181,9 @@ def generate_simulation(
         ε           ~ N(0, noise_std²) i.i.d.
         y           = Φ(X) β* + ε
 
-    The k non-zero entries of β* are chosen from the *first* k polynomial
-    terms of the dictionary (one term per base feature) so that:
-
-    * Each non-zero base feature contributes at least one term.
-    * ``true_base_indices`` = {0, 1, …, k-1} (first k features).
+    *k* polynomial terms are chosen **uniformly at random** from the full
+    dictionary of 2·degree·p columns.  ``true_base_indices`` is the set of
+    base features that appear in at least one selected term.
 
     Parameters
     ----------
@@ -193,7 +192,8 @@ def generate_simulation(
     p : int
         Number of base features.
     k : int
-        Number of non-zero *base features* in β*.  Must satisfy k ≤ p.
+        Number of non-zero *polynomial terms* in β*.
+        Must satisfy ``k ≤ 2·degree·p``.
     degree : int
         Maximum absolute polynomial exponent.
     n_components : int
@@ -212,8 +212,12 @@ def generate_simulation(
     -------
     SimulatedDataset
     """
-    if k > p:
-        raise ValueError(f"k ({k}) must not exceed p ({p})")
+    n_terms_total = 2 * degree * p
+    if k > n_terms_total:
+        raise ValueError(
+            f"k ({k}) must not exceed the total number of polynomial terms "
+            f"({n_terms_total} = 2·degree·p = 2·{degree}·{p})"
+        )
 
     rng = np.random.default_rng(random_state)
 
@@ -239,16 +243,11 @@ def generate_simulation(
     base_indices_list = poly_result.base_feature_indices  # list of int (base feature per col)
     exponents = poly_result.power_exponents           # list of int (exponent per col)
 
-    # Choose one polynomial term per each of the first k base features
-    # (specifically the degree-1 term x_j^1) as the support of β*
-    true_poly_idx: list[int] = []
-    true_base_indices: set[int] = set(range(k))
-    for j in range(k):
-        # Find the index of x_j^1 in the dictionary
-        for col_idx, (base_idx, exp) in enumerate(zip(base_indices_list, exponents)):
-            if base_idx == j and exp == 1:
-                true_poly_idx.append(col_idx)
-                break
+    # Randomly choose k distinct polynomial term indices from the full dictionary
+    true_poly_idx: list[int] = sorted(
+        rng.choice(len(base_indices_list), size=k, replace=False)
+    )
+    true_base_indices: set[int] = {base_indices_list[i] for i in true_poly_idx}
 
     # Non-zero coefficients drawn uniformly from [-2, -0.5] ∪ [0.5, 2]
     signs = rng.choice([-1, 1], size=k)

@@ -90,7 +90,7 @@ class SimulationConfig:
     n_labeled : int
         Number of labeled training samples.
     k : int
-        Sparsity — number of non-zero base features in β*.
+        Sparsity — number of non-zero polynomial terms in β*.
     setting : str
         ``"supervised"`` or ``"semi_supervised"``.
     n_unlabeled_ratio : float
@@ -433,11 +433,13 @@ def run_simulation(config: SimulationConfig) -> list[SimulationResult]:
                 f1 = None
 
             # Approximate AUC: 0.5 * (TPR + specificity)
-            # specificity = TN / (TN + FP),  TN = (p - k) - FP
-            if (rb.tpr is not None and fp is not None
-                    and config.p > config.k):
-                tn = (config.p - config.k) - fp
-                tn = max(0, tn)
+            # specificity = TN / (TN + FP)
+            # At the base-feature level: TN = p - n_true_base - FP,
+            # where n_true_base = TP + FN (the true support size).
+            if (rb.tpr is not None and tp is not None
+                    and fp is not None and fn is not None):
+                n_true_base = tp + fn
+                tn = max(0, config.p - n_true_base - fp)
                 specificity = tn / max(1, tn + fp)
                 auc = 0.5 * (rb.tpr + specificity)
             else:
@@ -588,7 +590,8 @@ def default_configs(
     """Build the default simulation sweep configurations.
 
     Creates one :class:`SimulationConfig` for every combination of
-    ``p × n × k × setting × degree``.  Configurations where ``k >= p`` are
+    ``p × n × k × setting × degree``.  Configurations where ``k >= 2·degree·p``
+    (i.e. k equals or exceeds the total number of polynomial terms) are
     automatically skipped.
 
     Parameters
@@ -598,7 +601,8 @@ def default_configs(
     n_values : tuple of int
         Sample sizes to sweep (default ``(100, 300, 500)``).
     k_values : tuple of int
-        Sparsity levels to sweep (default ``(2, 3)``).
+        Sparsity levels — number of non-zero polynomial terms — to sweep
+        (default ``(2, 3)``).
     settings : tuple of str
         Evaluation settings: ``"supervised"`` and/or
         ``"semi_supervised"`` (default: both).
@@ -637,7 +641,7 @@ def default_configs(
         for p in p_values:
             for n in n_values:
                 for k in k_values:
-                    if k >= p:
+                    if k >= 2 * deg * p:
                         continue
                     for setting in settings:
                         configs.append(
@@ -674,18 +678,18 @@ def sweep_degree_nonzero_configs(
     Creates one :class:`SimulationConfig` for every combination of
     ``degree × k × n × setting``.  Intended for requirement 1 of the
     simulation study: varying the degree of polynomials (2, 3) and the
-    number of non-zero elements (5, 10, 15, 20) while keeping *p* and
-    other hyper-parameters fixed.
+    number of non-zero polynomial terms (5, 10, 15, 20) while keeping *p*
+    and other hyper-parameters fixed.
 
     Parameters
     ----------
     degree_values : tuple of int
         Polynomial degrees to sweep (default ``(2, 3)``).
     nonzero_values : tuple of int
-        Sparsity levels *k* (non-zero polynomial elements) to sweep
+        Sparsity levels *k* (non-zero polynomial terms) to sweep
         (default ``(5, 10, 15, 20)``).
     p : int
-        Number of base features.  Must satisfy ``p > max(nonzero_values)``.
+        Number of base features.
         Default 25.
     n_values : tuple of int
         Sample sizes to sweep (default ``(100, 300, 500)``).
@@ -706,7 +710,7 @@ def sweep_degree_nonzero_configs(
     -------
     list of SimulationConfig
         One entry per ``degree × k × n × setting`` combination with
-        ``k < p``.
+        ``k < 2·degree·p``.
     """
     if methods is None:
         methods = ["ic_knock_poly"]
@@ -714,7 +718,7 @@ def sweep_degree_nonzero_configs(
     configs: list[SimulationConfig] = []
     for deg in degree_values:
         for k in nonzero_values:
-            if k >= p:
+            if k >= 2 * deg * p:
                 continue
             for n in n_values:
                 for setting in settings:

@@ -91,7 +91,9 @@ class TestGenerateSimulation:
     def test_true_base_indices_length(self):
         k = 3
         ds = generate_simulation(n_labeled=50, p=8, k=k, random_state=5)
-        assert len(ds.true_base_indices) == k
+        # true_base_indices holds the unique base features touched by the k
+        # randomly selected polynomial terms; there can be at most k of them.
+        assert 1 <= len(ds.true_base_indices) <= k
 
     def test_true_poly_terms_length(self):
         k = 2
@@ -107,9 +109,11 @@ class TestGenerateSimulation:
         ds = generate_simulation(n_labeled=100, p=10, k=3, random_state=8)
         assert np.all(np.isfinite(ds.y))
 
-    def test_k_exceeds_p_raises(self):
-        with pytest.raises(ValueError, match=r"k \(5\) must not exceed p \(4\)"):
-            generate_simulation(n_labeled=50, p=4, k=5)
+    def test_k_exceeds_total_terms_raises(self):
+        # p=4, degree=2 (default): total polynomial terms = 2*2*4 = 16
+        # k=17 exceeds the total → should raise
+        with pytest.raises(ValueError, match=r"k \(17\) must not exceed"):
+            generate_simulation(n_labeled=50, p=4, k=17)
 
     def test_reproducible(self):
         ds1 = generate_simulation(n_labeled=60, p=5, k=2, random_state=0)
@@ -182,15 +186,17 @@ class TestDefaultConfigs:
         assert len(cfgs) > 0
 
     def test_k_ge_p_skipped(self):
-        """Configurations with k ≥ p must be excluded."""
+        """Configurations with k >= 2*degree*p (total polynomial terms) must be excluded."""
+        # p=3, degree=2: total terms = 2*2*3 = 12; k=12 should be skipped, k=11 kept
         cfgs = default_configs(
             p_values=(3,),
             n_values=(100,),
-            k_values=(3, 4),  # both ≥ p=3, should be skipped
+            k_values=(11, 12),
             settings=("supervised",),
+            degree_values=(2,),
             n_trials=1,
         )
-        assert all(cfg.k < cfg.p for cfg in cfgs)
+        assert all(c.k < 2 * c.degree * c.p for c in cfgs)
 
     def test_both_settings(self):
         cfgs = default_configs(
@@ -507,11 +513,14 @@ class TestSweepDegreeNonzeroConfigs:
         assert ks == {5, 10, 15}
 
     def test_k_ge_p_skipped(self):
+        """Configurations with k >= 2*degree*p must be excluded."""
+        # p=15, degree=2: total terms = 2*2*15 = 60
+        # k=59 is kept, k=60 is skipped
         cfgs = self.sweep_fn(
-            degree_values=(2,), nonzero_values=(5, 10, 20),
+            degree_values=(2,), nonzero_values=(5, 10, 59, 60),
             p=15, n_values=(100,), settings=("supervised",), n_trials=1,
         )
-        assert all(c.k < c.p for c in cfgs)
+        assert all(c.k < 2 * c.degree * c.p for c in cfgs)
 
     def test_count(self):
         cfgs = self.sweep_fn(
@@ -616,7 +625,7 @@ class TestVisualize:
         import matplotlib
         matplotlib.use("Agg")
         from simulations.visualize import plot_all
-        figs = plot_all(tiny_results, output_dir=str(tmp_path), show=False)
+        figs = plot_all(tiny_results, output_dir=str(tmp_path), fmt="png", show=False)
         assert len(figs) > 0
         png_files = list(tmp_path.glob("*.png"))
         assert len(png_files) > 0
