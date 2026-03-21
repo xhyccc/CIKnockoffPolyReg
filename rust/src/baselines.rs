@@ -314,11 +314,11 @@ pub struct PolyLasso {
     pub max_iter: usize,
     pub tol: f64,
 
-    coef_: Vec<f64>,
-    intercept_: f64,
-    col_means_: Vec<f64>,
-    col_stds_: Vec<f64>,
-    exp_: Option<ExpandedFeatures>,
+    pub coef_: Vec<f64>,
+    pub intercept_: f64,
+    pub col_means_: Vec<f64>,
+    pub col_stds_: Vec<f64>,
+    pub exp_: Option<ExpandedFeatures>,
 }
 
 impl Default for PolyLasso {
@@ -545,11 +545,11 @@ pub struct PolyOMP {
     /// Maximum non-zeros.  `0` → `min(n-1, p_expanded)`.
     pub max_nonzero: usize,
 
-    coef_: Vec<f64>,
-    intercept_: f64,
-    col_means_: Vec<f64>,
-    col_stds_: Vec<f64>,
-    exp_: Option<ExpandedFeatures>,
+    pub coef_: Vec<f64>,
+    pub intercept_: f64,
+    pub col_means_: Vec<f64>,
+    pub col_stds_: Vec<f64>,
+    pub exp_: Option<ExpandedFeatures>,
 }
 
 impl Default for PolyOMP {
@@ -721,12 +721,12 @@ pub struct PolySTLSQ {
     pub threshold: f64,
     pub max_iter: usize,
 
-    coef_: Vec<f64>,
-    intercept_: f64,
-    active_: Vec<bool>,
-    col_means_: Vec<f64>,
-    col_stds_: Vec<f64>,
-    exp_: Option<ExpandedFeatures>,
+    pub coef_: Vec<f64>,
+    pub intercept_: f64,
+    pub active_: Vec<bool>,
+    pub col_means_: Vec<f64>,
+    pub col_stds_: Vec<f64>,
+    pub exp_: Option<ExpandedFeatures>,
 }
 
 impl Default for PolySTLSQ {

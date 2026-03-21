@@ -112,10 +112,11 @@ def run_comparison(
            "poly_clime", "poly_knockoff", "sparse_poly_stlsq"]``.
         Default ``None`` runs all.
     backend : str
-        Computational kernel for IC-Knock-Poly's polynomial expansion,
-        W-statistics, and PoSI threshold.  One of ``"python"`` (default),
-        ``"cpp"``, or ``"rust"``.  Baseline methods always use Python;
-        only IC-Knock-Poly uses this setting.
+        Computational kernel.  One of ``"python"`` (default), ``"cpp"``,
+        or ``"rust"``.  When ``"rust"``, IC-Knock-Poly uses the Rust kernel
+        and Poly-Lasso, Poly-OMP, and Sparse-Poly-STLSQ are executed via
+        the Rust shared library; Poly-CLIME and Poly-Knockoff always use
+        Python.
 
     Returns
     -------
@@ -136,6 +137,20 @@ def run_comparison(
         unknown = set(methods) - set(all_methods)
         if unknown:
             raise ValueError(f"Unknown methods: {unknown}. Available: {all_methods}")
+
+    # Lazy-import Rust baselines when the Rust backend is selected
+    if backend == "rust":
+        try:
+            from .rust_baselines import (
+                RustPolyLasso,
+                RustPolyOMP,
+                RustSparsePolySTLSQ,
+            )
+            _rust_baselines_available = True
+        except Exception:  # noqa: BLE001
+            _rust_baselines_available = False
+    else:
+        _rust_baselines_available = False
 
     X, y = data.X, data.y
     X_unlabeled = data.X_unlabeled
@@ -190,7 +205,10 @@ def run_comparison(
         t0 = time.perf_counter()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            bl = PolyLasso(degree=degree, random_state=random_state)
+            if _rust_baselines_available:
+                bl = RustPolyLasso(degree=degree, random_state=random_state)
+            else:
+                bl = PolyLasso(degree=degree, random_state=random_state)
             bl.fit(X, y)
         elapsed = time.perf_counter() - t0
         _, peak = tracemalloc.get_traced_memory()
@@ -215,7 +233,10 @@ def run_comparison(
         t0 = time.perf_counter()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            bl = PolyOMP(degree=degree)
+            if _rust_baselines_available:
+                bl = RustPolyOMP(degree=degree)
+            else:
+                bl = PolyOMP(degree=degree)
             bl.fit(X, y)
         elapsed = time.perf_counter() - t0
         _, peak = tracemalloc.get_traced_memory()
@@ -231,7 +252,7 @@ def run_comparison(
         print(f"       selected={rb.n_selected}, R²={rb.r_squared:.3f}, t={elapsed:.1f}s")
 
     # ------------------------------------------------------------------
-    # Poly + CLIME knockoff filter
+    # Poly + CLIME knockoff filter  (Python only — no Rust implementation)
     # ------------------------------------------------------------------
     if "poly_clime" in methods:
         step += 1
@@ -256,7 +277,7 @@ def run_comparison(
         print(f"       selected={rb.n_selected}, R²={rb.r_squared:.3f}, t={elapsed:.1f}s")
 
     # ------------------------------------------------------------------
-    # Poly + standard knockoff filter
+    # Poly + standard knockoff filter  (Python only — no Rust implementation)
     # ------------------------------------------------------------------
     if "poly_knockoff" in methods:
         step += 1
@@ -290,7 +311,10 @@ def run_comparison(
         t0 = time.perf_counter()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            bl = SparsePolySTLSQ(degree=degree)
+            if _rust_baselines_available:
+                bl = RustSparsePolySTLSQ(degree=degree)
+            else:
+                bl = SparsePolySTLSQ(degree=degree)
             bl.fit(X, y)
         elapsed = time.perf_counter() - t0
         _, peak = tracemalloc.get_traced_memory()
