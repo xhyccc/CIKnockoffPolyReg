@@ -816,7 +816,7 @@ recall), precision, and runtime.  All results are averaged over replications.
 \paragraph{Sweep parameters.}
 Three experimental sweeps are conducted:
 \begin{enumerate}[label=(\roman*)]
-  \item \textbf{Default sweep}: $p=5$, $d=2$, $k \in \{2,3,4\}$,
+  \item \textbf{Default sweep}: $p=5$, $d=2$, $k \in \{2,3\}$,
     $n \in \{100, 200, 300, 400, 500\}$.
   \item \textbf{Degree sweep}: $p=5$, $n=300$, $k=2$,
     $d \in \{2, 3\}$.
@@ -830,7 +830,7 @@ Table~\ref{tab:fdr_n} and Figure~\ref{fig:fdr_n} report FDR as $n$ varies
 for the supervised setting with $k=2$, $d=2$.  IC-Knock-Poly achieves
 $\mathrm{FDR} = 0.000$ uniformly across all sample sizes, confirming
 Theorem~\ref{thm:fdr}.  In contrast, PolyLasso incurs FDR between 0.311
-and 0.422; PolyOMP ranges from 0.111 to 0.511; SparsePolySTLSQ ranges
+and 0.389; PolyOMP ranges from 0.111 to 0.511; SparsePolySTLSQ ranges
 from 0.000 to 0.422.  PolyCLIME and PolyKnockoff also achieve
 $\mathrm{FDR} = 0$ at $n=100$ but at cost of zero recall.
 
@@ -889,8 +889,8 @@ GMM-based knockoffs being overly conservative when the GMM is mis-specified
 or estimated from limited data.
 
 By contrast, SparsePolySTLSQ achieves F1~$= 1.000$ at $n=300$ when $k=2$
-and $d=2$ (Table~\ref{tab:degree_k}), though at the cost of FDR~$= 0.389$
-in the same setting.  PolyOMP achieves F1~$= 0.933$ at $n=500$, with
+and $d=2$ (Table~\ref{tab:degree_k}), with FDR~$= 0.000$ in the same
+setting.  PolyOMP achieves F1~$= 0.933$ at $n=500$, with
 FDR~$= 0.111$.
 
 \begin{table}[H]
@@ -1086,7 +1086,7 @@ conservative Knockoff+ threshold, and weak importance statistics), and we
 have proposed five concrete directions for recovering power.
 
 Competing methods (PolyLasso, PolyOMP, SparsePolySTLSQ) achieve non-trivial
-recall but incur FDR between 0.1 and 0.7, making them unsuitable for
+recall but incur FDR between 0.1 and 0.72, making them unsuitable for
 applications requiring strict error control.  The ability to obtain
 \emph{exactly zero} false discoveries makes IC-Knock-Poly uniquely
 appropriate for high-stakes scientific discovery tasks.
