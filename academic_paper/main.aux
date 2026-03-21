@@ -1,0 +1,163 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{brunton2016discovering}
+\citation{rudy2017data}
+\citation{tibshirani1996regression}
+\citation{zhao2006model}
+\citation{meinshausen2010stability}
+\citation{fan2008sure}
+\citation{barber2015controlling}
+\citation{candes2018panning}
+\citation{romano2020deep}
+\citation{liu2018auto}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\citation{tibshirani1996regression}
+\citation{donoho2006compressed}
+\citation{buhlmann2011statistics}
+\citation{zou2005regularization}
+\citation{friedman2008sparse}
+\citation{berk2013valid}
+\citation{brunton2016discovering}
+\citation{rudy2017data}
+\citation{zheng2019unified}
+\citation{barber2015controlling}
+\citation{candes2018panning}
+\citation{romano2020deep}
+\citation{benjamini1995controlling}
+\citation{storey2002direct}
+\citation{meinshausen2010stability}
+\citation{barber2015controlling}
+\citation{donoho2006compressed}
+\citation{chen1998atomic}
+\citation{buhlmann2011statistics}
+\citation{hastie2015statistical}
+\citation{wainwright2019high}
+\@writefile{toc}{\contentsline {paragraph}{Contributions.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Paper organisation.}{2}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{2}{2}{Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Sparse regression and model selection.}{2}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{SINDy and equation discovery.}{2}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Knockoffs for variable selection.}{2}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{FDR control in multiple testing.}{2}{section*.6}\protected@file@percent }
+\citation{candes2018panning}
+\@writefile{toc}{\contentsline {paragraph}{Dictionary learning and compressed sensing.}{3}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Problem Formulation}{3}{section.3}\protected@file@percent }
+\newlabel{sec:problem}{{3}{3}{Problem Formulation}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Data model}{3}{subsection.3.1}\protected@file@percent }
+\newlabel{eq:dgp}{{1}{3}{Data model}{equation.3.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Polynomial dictionary}{3}{subsection.3.2}\protected@file@percent }
+\newlabel{eq:linear_model}{{2}{3}{Polynomial dictionary}{equation.3.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Goal and FDR criterion}{3}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Methodology}{3}{section.4}\protected@file@percent }
+\newlabel{sec:method}{{4}{3}{Methodology}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Phase 1: Distribution learning via penalised GMM}{4}{subsection.4.1}\protected@file@percent }
+\newlabel{sec:gmm}{{4.1}{4}{Phase 1: Distribution learning via penalised GMM}{subsection.4.1}{}}
+\newlabel{eq:gmm}{{3}{4}{Phase 1: Distribution learning via penalised GMM}{equation.4.3}{}}
+\newlabel{eq:glasso}{{4}{4}{Phase 1: Distribution learning via penalised GMM}{equation.4.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Phase 2: Initialisation}{4}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Phase 3: Iterative expansion and screening}{4}{subsection.4.3}\protected@file@percent }
+\newlabel{sec:phase3}{{4.3}{4}{Phase 3: Iterative expansion and screening}{subsection.4.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.1}Conditional knockoff generation}{4}{subsubsection.4.3.1}\protected@file@percent }
+\newlabel{sec:knockoff_gen}{{4.3.1}{4}{Conditional knockoff generation}{subsubsection.4.3.1}{}}
+\newlabel{eq:cond_dist}{{5}{4}{Conditional knockoff generation}{equation.4.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.2}Expanded dictionary and importance statistics}{4}{subsubsection.4.3.2}\protected@file@percent }
+\newlabel{eq:W_statistic}{{6}{4}{Expanded dictionary and importance statistics}{equation.4.6}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.3}PoSI threshold with $\alpha $-spending}{5}{subsubsection.4.3.3}\protected@file@percent }
+\newlabel{eq:spending}{{7}{5}{PoSI threshold with $\alpha $-spending}{equation.4.7}{}}
+\newlabel{eq:tau}{{8}{5}{PoSI threshold with $\alpha $-spending}{equation.4.8}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.3.4}Support update and stopping rule}{5}{subsubsection.4.3.4}\protected@file@percent }
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces IC-Knock-Poly}}{5}{algorithm.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{alg:main}{{1}{5}{IC-Knock-Poly}{algorithm.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Theoretical Guarantees}{5}{section.5}\protected@file@percent }
+\newlabel{sec:theory}{{5}{5}{Theoretical Guarantees}{section.5}{}}
+\newlabel{asm:bounded}{{1}{5}{Bounded mixture density}{assumption.1}{}}
+\newlabel{asm:re}{{2}{5}{Restricted eigenvalue condition}{assumption.2}{}}
+\newlabel{asm:signal}{{3}{5}{Minimum signal strength}{assumption.3}{}}
+\citation{buhlmann2011statistics}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Lemma: Asymptotic exchangeability of conditional knockoffs}{6}{subsection.5.1}\protected@file@percent }
+\newlabel{lem:exchange}{{1}{6}{Asymptotic exchangeability}{lemma.1}{}}
+\newlabel{eq:exchange_bound}{{9}{6}{Asymptotic exchangeability}{equation.5.9}{}}
+\newlabel{eq:glasso_rate}{{10}{6}{Lemma: Asymptotic exchangeability of conditional knockoffs}{equation.5.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Theorem 1: Global FDR control}{6}{subsection.5.2}\protected@file@percent }
+\newlabel{sec:fdr_proof}{{5.2}{6}{Theorem 1: Global FDR control}{subsection.5.2}{}}
+\newlabel{thm:fdr}{{1}{6}{Global FDR control}{theorem.1}{}}
+\newlabel{eq:fdr_bound}{{11}{6}{Global FDR control}{equation.5.11}{}}
+\citation{barber2015controlling}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Theorem 2: Parameter estimation}{7}{subsection.5.3}\protected@file@percent }
+\newlabel{thm:estimation}{{2}{7}{Parameter estimation rate}{theorem.2}{}}
+\newlabel{eq:estimation_rate}{{12}{7}{Parameter estimation rate}{equation.5.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Computational Acceleration}{8}{section.6}\protected@file@percent }
+\newlabel{sec:computation}{{6}{8}{Computational Acceleration}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Complexity analysis}{8}{subsection.6.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Per-iteration computational complexity of each IC-Knock-Poly component.}}{8}{table.caption.8}\protected@file@percent }
+\newlabel{tab:complexity}{{1}{8}{Per-iteration computational complexity of each IC-Knock-Poly component}{table.caption.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Implementation}{8}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Experiments}{9}{section.7}\protected@file@percent }
+\newlabel{sec:experiments}{{7}{9}{Experiments}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Setup}{9}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Data generation.}{9}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Methods compared.}{9}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Metrics.}{9}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Sweep parameters.}{9}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Main results: FDR control}{9}{subsection.7.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces FDR and F1 score as a function of sample size $n$. Supervised setting, $p=5$, $k=2$, $d=2$. Mean over 3 replications. Bold indicates $\mathrm  {FDR} \leq 0.10$.}}{9}{table.caption.13}\protected@file@percent }
+\newlabel{tab:fdr_n}{{2}{9}{FDR and F1 score as a function of sample size $n$. Supervised setting, $p=5$, $k=2$, $d=2$. Mean over 3 replications. Bold indicates $\mathrm {FDR} \leq 0.10$}{table.caption.13}{}}
+\newlabel{fig:fdr_n}{{1a}{10}{FDR vs.\ $n$ ($k=2$, $d=2$)}{figure.caption.14}{}}
+\newlabel{sub@fig:fdr_n}{{a}{10}{FDR vs.\ $n$ ($k=2$, $d=2$)}{figure.caption.14}{}}
+\newlabel{fig:f1_n}{{1b}{10}{F1 vs.\ $n$ ($k=2$, $d=2$)}{figure.caption.14}{}}
+\newlabel{sub@fig:f1_n}{{b}{10}{F1 vs.\ $n$ ($k=2$, $d=2$)}{figure.caption.14}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Performance as a function of sample size for the supervised setting with $p=5$, $k=2$, $d=2$. IC-Knock-Poly (solid line) achieves FDR~$=0$ throughout but also recall~$=0$ (F1~$=0$), indicating conservative selection. PolyLasso and PolyOMP trade higher recall for substantially elevated FDR.}}{10}{figure.caption.14}\protected@file@percent }
+\newlabel{fig:main_n}{{1}{10}{Performance as a function of sample size for the supervised setting with $p=5$, $k=2$, $d=2$. IC-Knock-Poly (solid line) achieves FDR~$=0$ throughout but also recall~$=0$ (F1~$=0$), indicating conservative selection. PolyLasso and PolyOMP trade higher recall for substantially elevated FDR}{figure.caption.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Main results: F1 score and recall}{10}{subsection.7.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces FDR and F1 varying polynomial degree (left) and number of non-zeros $k$ (right). $p=5$, $n=300$, supervised.}}{10}{table.caption.15}\protected@file@percent }
+\newlabel{tab:degree_k}{{3}{10}{FDR and F1 varying polynomial degree (left) and number of non-zeros $k$ (right). $p=5$, $n=300$, supervised}{table.caption.15}{}}
+\citation{barber2015controlling}
+\newlabel{fig:fdr_degree}{{2a}{11}{FDR vs.\ polynomial degree}{figure.caption.16}{}}
+\newlabel{sub@fig:fdr_degree}{{a}{11}{FDR vs.\ polynomial degree}{figure.caption.16}{}}
+\newlabel{fig:runtime_n}{{2b}{11}{Runtime vs.\ $n$}{figure.caption.16}{}}
+\newlabel{sub@fig:runtime_n}{{b}{11}{Runtime vs.\ $n$}{figure.caption.16}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Left: FDR as a function of polynomial degree ($p=5$, $n=300$, $k=2$). IC-Knock-Poly maintains FDR~$=0$ at both $d=2$ and $d=3$. Right: Wall-clock runtime as a function of $n$ for all methods at $k=2$, $d=2$. IC-Knock-Poly is the slowest method due to the GMM and knockoff overhead, though the cost is dominated by the CV-Lasso step.}}{11}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:degree_runtime}{{2}{11}{Left: FDR as a function of polynomial degree ($p=5$, $n=300$, $k=2$). IC-Knock-Poly maintains FDR~$=0$ at both $d=2$ and $d=3$. Right: Wall-clock runtime as a function of $n$ for all methods at $k=2$, $d=2$. IC-Knock-Poly is the slowest method due to the GMM and knockoff overhead, though the cost is dominated by the CV-Lasso step}{figure.caption.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}Scalability}{11}{subsection.7.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Wall-clock runtime (seconds) at $n=300$, $k=2$, $d=2$, $p=5$.}}{11}{table.caption.17}\protected@file@percent }
+\newlabel{tab:runtime}{{4}{11}{Wall-clock runtime (seconds) at $n=300$, $k=2$, $d=2$, $p=5$}{table.caption.17}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Discussion}{11}{section.8}\protected@file@percent }
+\newlabel{sec:discussion}{{8}{11}{Discussion}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Understanding the zero-recall behaviour}{11}{subsection.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{1.\ GMM mis-specification.}{11}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{2.\ Conservative Knockoff+ threshold.}{12}{section*.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{3.\ Small signal-to-noise ratio in the expanded dictionary.}{12}{section*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{4.\ $\alpha $-spending conservatism.}{12}{section*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Scientific validity of FDR~$= 0$}{12}{subsection.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Paths toward higher recall}{12}{subsection.8.3}\protected@file@percent }
+\bibstyle{plain}
+\bibdata{references}
+\bibcite{barber2015controlling}{1}
+\bibcite{benjamini1995controlling}{2}
+\bibcite{berk2013valid}{3}
+\bibcite{brunton2016discovering}{4}
+\bibcite{buhlmann2011statistics}{5}
+\bibcite{candes2018panning}{6}
+\bibcite{chen1998atomic}{7}
+\bibcite{donoho2006compressed}{8}
+\bibcite{fan2008sure}{9}
+\bibcite{friedman2008sparse}{10}
+\bibcite{hastie2015statistical}{11}
+\bibcite{liu2018auto}{12}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusion}{13}{section.9}\protected@file@percent }
+\newlabel{sec:conclusion}{{9}{13}{Conclusion}{section.9}{}}
+\bibcite{meinshausen2010stability}{13}
+\bibcite{romano2020deep}{14}
+\bibcite{rudy2017data}{15}
+\bibcite{storey2002direct}{16}
+\bibcite{tibshirani1996regression}{17}
+\bibcite{wainwright2019high}{18}
+\bibcite{zhao2006model}{19}
+\bibcite{zheng2019unified}{20}
+\bibcite{zou2005regularization}{21}
+\gdef \@abspage@last{14}

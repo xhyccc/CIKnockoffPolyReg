@@ -263,7 +263,10 @@ has $e_j \neq 0$.
 Fix a maximum exponent $d \geq 1$.  For a single base feature $x_j$ define
 the exponent set $\calE = \{-d, \ldots, -1, 1, \ldots, d\}$ of cardinality
 $m = 2d$.  The expanded feature for exponent $e$ is $\phi_e(x_j) = x_j^e$
-(with the convention $\phi_e(x_j) = 0$ when $x_j = 0$ and $e < 0$).  The
+(for $e < 0$, $\phi_e(x_j)$ is left undefined when $x_j = 0$;
+in practice observations with $|x_j| < \epsilon$ for a small tolerance
+$\epsilon > 0$ are excluded from the negative-exponent columns,
+consistent with the implementation).  The
 full \emph{polynomial dictionary} for column $j$ is
 \[
   \Phi_j(\xb_j) \;=\;
@@ -399,7 +402,13 @@ At iteration $t$ allocate budget
   q_t \;=\; \frac{Q}{t(t+1)},
   \label{eq:spending}
 \end{equation}
-so that $\sum_{t=1}^\infty q_t = Q$.  Compute the \emph{Knockoff+} threshold
+so that $\sum_{t=1}^\infty q_t = Q$.  We call this the
+\emph{Riemann-zeta spending sequence} because $\sum_{t=1}^\infty 1/[t(t+1)]
+= 1$ (a telescoping series), so $q_t$ exhausts the full budget $Q$ in the
+limit.  Alternative choices (e.g., the geometric sequence
+$q_t = Q(1-\rho)\rho^{t-1}$) may offer better power for signals
+concentrated in the first few iterations.
+Compute the \emph{Knockoff+} threshold
 \begin{equation}
   \tau_t \;=\;
   \min\!\left\{
@@ -520,8 +529,9 @@ $\N(\mu_{k,j|{-j}},\, \sigma^2_{k,j|{-j}})$ where
   \sigma^2_{k,j|{-j}} \;=\; (\Theta^*_{k,jj})^{-1}.
 \]
 The knockoff $\tilde X_j$ is sampled from the estimated counterpart with
-$\hat\Thetab_k$ in place of $\Thetab_k^*$.  By Lemma~6 of \cite{buhlmann2011statistics}
-(GraphLasso minimax bound), under Assumption~\ref{asm:bounded} and
+$\hat\Thetab_k$ in place of $\Thetab_k^*$.  By the minimax bound for GraphLasso precision-matrix estimation (see
+\cite{buhlmann2011statistics}, Chapter~7, and \cite{wainwright2019high},
+Theorem~7.2), under Assumption~\ref{asm:bounded} and
 $n \gtrsim \log p$:
 \begin{equation}
   \norm{\hat\Thetab_k - \Thetab_k^*}_F

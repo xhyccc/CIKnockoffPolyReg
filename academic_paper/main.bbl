@@ -1,0 +1,126 @@
+\begin{thebibliography}{10}
+
+\bibitem{barber2015controlling}
+Rina~Foygel Barber and Emmanuel~J. Cand\`{e}s.
+\newblock Controlling the false discovery rate via knockoffs.
+\newblock {\em The Annals of Statistics}, 43(5):2055--2085, 2015.
+
+\bibitem{benjamini1995controlling}
+Yoav Benjamini and Yosef Hochberg.
+\newblock Controlling the false discovery rate: A practical and powerful
+  approach to multiple testing.
+\newblock {\em Journal of the Royal Statistical Society: Series B
+  (Methodological)}, 57(1):289--300, 1995.
+
+\bibitem{berk2013valid}
+Richard Berk, Lawrence Brown, Andreas Buja, Kai Zhang, and Linda Zhao.
+\newblock Valid post-selection inference.
+\newblock {\em The Annals of Statistics}, 41(2):802--837, 2013.
+
+\bibitem{brunton2016discovering}
+Steven~L. Brunton, Joshua~L. Proctor, and J.~Nathan Kutz.
+\newblock Discovering governing equations from data by sparse identification of
+  nonlinear dynamical systems.
+\newblock {\em Proceedings of the National Academy of Sciences},
+  113(15):3932--3937, 2016.
+
+\bibitem{buhlmann2011statistics}
+Peter B{\"u}hlmann and Sara van~de Geer.
+\newblock {\em Statistics for High-Dimensional Data: Methods, Theory and
+  Applications}.
+\newblock Springer, Berlin, Heidelberg, 2011.
+
+\bibitem{candes2018panning}
+Emmanuel Cand\`{e}s, Yingying Fan, Lucas Janson, and Jinchi Lv.
+\newblock Panning for gold: Model-{X} knockoffs for high-dimensional controlled
+  variable selection.
+\newblock {\em Journal of the Royal Statistical Society: Series B (Statistical
+  Methodology)}, 80(3):551--577, 2018.
+
+\bibitem{chen1998atomic}
+Scott~Shaobing Chen, David~L. Donoho, and Michael~A. Saunders.
+\newblock Atomic decomposition by basis pursuit.
+\newblock {\em SIAM Journal on Scientific Computing}, 20(1):33--61, 1998.
+
+\bibitem{donoho2006compressed}
+David~L. Donoho.
+\newblock Compressed sensing.
+\newblock {\em IEEE Transactions on Information Theory}, 52(4):1289--1306,
+  2006.
+
+\bibitem{fan2008sure}
+Jianqing Fan and Jinchi Lv.
+\newblock Sure independence screening for ultrahigh dimensional feature space.
+\newblock {\em Journal of the Royal Statistical Society: Series B (Statistical
+  Methodology)}, 70(5):849--911, 2008.
+
+\bibitem{friedman2008sparse}
+Jerome Friedman, Trevor Hastie, and Robert Tibshirani.
+\newblock Sparse inverse covariance estimation with the graphical lasso.
+\newblock {\em Biostatistics}, 9(3):432--441, 2008.
+
+\bibitem{hastie2015statistical}
+Trevor Hastie, Robert Tibshirani, and Martin Wainwright.
+\newblock {\em Statistical Learning with Sparsity: The Lasso and
+  Generalizations}.
+\newblock CRC Press, Boca Raton, FL, 2015.
+
+\bibitem{liu2018auto}
+Wenda Liu and Lucas Janson.
+\newblock Auto-encoding knockoff generator for {FDR} controlled variable
+  selection.
+\newblock In {\em Proceedings of the 35th International Conference on Machine
+  Learning}, pages 3105--3114. PMLR, 2018.
+
+\bibitem{meinshausen2010stability}
+Nicolai Meinshausen and Peter B{\"u}hlmann.
+\newblock Stability selection.
+\newblock {\em Journal of the Royal Statistical Society: Series B (Statistical
+  Methodology)}, 72(4):417--473, 2010.
+
+\bibitem{romano2020deep}
+Yaniv Romano, Matteo Sesia, and Emmanuel~J. Cand\`{e}s.
+\newblock Deep knockoffs.
+\newblock {\em Journal of the American Statistical Association},
+  115(532):1861--1872, 2020.
+
+\bibitem{rudy2017data}
+Samuel~H. Rudy, Steven~L. Brunton, Joshua~L. Proctor, and J.~Nathan Kutz.
+\newblock Data-driven discovery of partial differential equations.
+\newblock {\em Science Advances}, 3(4):e1602614, 2017.
+
+\bibitem{storey2002direct}
+John~D. Storey.
+\newblock A direct approach to false discovery rates.
+\newblock {\em Journal of the Royal Statistical Society: Series B (Statistical
+  Methodology)}, 64(3):479--498, 2002.
+
+\bibitem{tibshirani1996regression}
+Robert Tibshirani.
+\newblock Regression shrinkage and selection via the lasso.
+\newblock {\em Journal of the Royal Statistical Society: Series B
+  (Methodological)}, 58(1):267--288, 1996.
+
+\bibitem{wainwright2019high}
+Martin~J. Wainwright.
+\newblock {\em High-Dimensional Statistics: A Non-Asymptotic Viewpoint}.
+\newblock Cambridge University Press, Cambridge, UK, 2019.
+
+\bibitem{zhao2006model}
+Peng Zhao and Bin Yu.
+\newblock On model selection consistency of {L}asso.
+\newblock {\em Journal of Machine Learning Research}, 7:2541--2563, 2006.
+
+\bibitem{zheng2019unified}
+Peng Zheng, Travis Askham, Steven~L. Brunton, J.~Nathan Kutz, and Aleksandr~Y.
+  Aravkin.
+\newblock A unified framework for sparse relaxed regularized regression: {SR3}.
+\newblock {\em IEEE Access}, 7:1404--1423, 2019.
+
+\bibitem{zou2005regularization}
+Hui Zou and Trevor Hastie.
+\newblock Regularization and variable selection via the elastic net.
+\newblock {\em Journal of the Royal Statistical Society: Series B (Statistical
+  Methodology)}, 67(2):301--320, 2005.
+
+\end{thebibliography}
