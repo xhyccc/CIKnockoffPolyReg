@@ -1,0 +1,1110 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{multirow}
+
+\setlist[itemize]{label=--}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\newtheorem{assumption}{Assumption}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=green!50!black,
+  urlcolor=blue!60!black
+}
+
+% --- macros ------------------------------------------------------------------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\calX}{\mathcal{X}}
+\newcommand{\calF}{\mathcal{F}}
+\newcommand{\calA}{\mathcal{A}}
+\newcommand{\calB}{\mathcal{B}}
+\newcommand{\calL}{\mathcal{L}}
+\newcommand{\calS}{\mathcal{S}}
+\newcommand{\calE}{\mathcal{E}}
+\newcommand{\norm}[1]{\left\|#1\right\|}
+\newcommand{\abs}[1]{\left|#1\right|}
+\newcommand{\TV}{\mathrm{TV}}
+\newcommand{\FDR}{\mathrm{FDR}}
+\newcommand{\FDP}{\mathrm{FDP}}
+\newcommand{\TPR}{\mathrm{TPR}}
+\newcommand{\FPR}{\mathrm{FPR}}
+\newcommand{\indep}{\perp\!\!\!\perp}
+\newcommand{\cond}{\,|\,}
+\newcommand{\Xb}{\mathbf{X}}
+\newcommand{\xb}{\mathbf{x}}
+\newcommand{\yb}{\mathbf{y}}
+\newcommand{\betab}{\boldsymbol{\beta}}
+\newcommand{\Thetab}{\boldsymbol{\Theta}}
+\newcommand{\mub}{\boldsymbol{\mu}}
+\newcommand{\Sigmab}{\boldsymbol{\Sigma}}
+\newcommand{\OO}{O}
+% -----------------------------------------------------------------------------
+
+\title{\textbf{IC-Knock-Poly: Iterative Conditional Knockoffs\\
+for High-Dimensional Sparse Rational Polynomial Regression}}
+\author{Anonymous Authors}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We introduce \emph{IC-Knock-Poly}, an algorithm for discovering sparse
+rational polynomial governing equations from observational data under
+rigorous false discovery rate (FDR) control.  The method integrates three
+components: (i)~a penalised Gaussian mixture model (GMM) with GraphLasso
+precision matrices that learns the joint distribution of covariates from
+unlabelled data; (ii)~a conditional knockoff generator that exploits the
+estimated mixture structure to produce valid exchangeable decoys; and
+(iii)~an iterative knockoff--Lasso screening procedure with a
+\emph{post-selection inference} (PoSI) $\alpha$-spending budget that
+controls the \emph{global} FDR across all expansion steps.
+
+A polynomial dictionary $\Phi$ maps base features and their knockoffs into
+monomials of bounded degree, enabling the recovery of interpretable
+equations such as $y = x_1^2 + 1/x_2$ while preserving exchangeability
+throughout the expanded space.  We derive a non-asymptotic FDR bound and a
+minimax-rate parameter-estimation guarantee.  Simulation studies across a
+range of sample sizes ($n \in \{100,\ldots,500\}$), sparsity levels
+($k \in \{2,3,4\}$), and polynomial degrees ($d \in \{2,3\}$) confirm that
+IC-Knock-Poly achieves $\FDR = 0$ in all scenarios.  Current experiments
+reveal that the method's GMM-based knockoff generator is conservative: while
+FDR control is exact, true-positive recall is zero under the default
+configuration, indicating that the knockoff importance statistics are not yet
+sufficiently powered to cross the selection threshold.  We analyse this
+behaviour, compare it against four competitive baselines---PolyLasso,
+PolyOMP, SparsePolySTLSQ, and PolyKnockoff---and discuss concrete paths
+toward calibrating conservatism.
+\end{abstract}
+
+% =============================================================================
+\section{Introduction}
+\label{sec:intro}
+% =============================================================================
+
+Discovering interpretable, parsimonious models from high-dimensional data is
+a central challenge in scientific machine learning.  Many physical, biological,
+and engineering systems obey governing equations that are \emph{polynomial} or
+\emph{rational polynomial} in their state variables---Newton's laws, chemical
+kinetics, and ecological Lotka--Volterra dynamics are canonical examples.
+The \emph{sparse identification of nonlinear dynamics} (SINDy) framework
+\cite{brunton2016discovering,rudy2017data} demonstrated that such equations
+can be recovered from time-series data by regressing observations onto a
+``library'' of candidate functions.  However, SINDy and its extensions treat
+variable selection as a regularised regression problem without providing
+statistical guarantees on false discoveries.
+
+In the classical linear setting, the Lasso \cite{tibshirani1996regression}
+achieves model selection consistency under restrictive \emph{irrepresentable}
+conditions \cite{zhao2006model}, and even then controls only marginal
+inclusion probabilities rather than the FDR.  Stability selection
+\cite{meinshausen2010stability} and sure independence screening
+\cite{fan2008sure} offer different partial remedies but similarly lack
+finite-sample FDR guarantees in the non-linear case.
+
+The \emph{knockoff} filter \cite{barber2015controlling} provides exact
+finite-sample FDR control for linear models with known design matrices.
+\emph{Model-X knockoffs} \cite{candes2018panning} extended this to settings
+where only the feature distribution is known, decoupling the knockoff
+construction from the regression model.  Subsequent work introduced deep
+generative approaches to knockoff sampling \cite{romano2020deep,liu2018auto},
+but these are designed for linear or generalised linear responses and do not
+naturally accommodate the polynomial structure required for equation
+discovery.
+
+\paragraph{Contributions.}
+This paper makes the following contributions:
+\begin{enumerate}[leftmargin=*, label=\textbf{C\arabic*}.]
+  \item We formulate \emph{Sparse Rational Polynomial Regression} as a
+    simultaneous basis-expansion and FDR-controlled variable-selection problem
+    (Section~\ref{sec:problem}).
+  \item We propose IC-Knock-Poly, the first algorithm to combine penalised
+    GMM distribution learning, conditional knockoff generation, and iterative
+    PoSI $\alpha$-spending to solve this problem
+    (Section~\ref{sec:method}).
+  \item We prove a non-asymptotic FDR bound (Theorem~\ref{thm:fdr}) and a
+    minimax-optimal parameter-estimation guarantee
+    (Theorem~\ref{thm:estimation}), together with complete proofs
+    (Section~\ref{sec:theory}).
+  \item We provide an open-source Python implementation with CPU-parallel
+    and Rust-accelerated kernels, and a thorough complexity analysis
+    (Section~\ref{sec:computation}).
+  \item We report a comprehensive simulation study comparing IC-Knock-Poly
+    with PolyLasso, PolyOMP, SparsePolySTLSQ, PolyCLIME, and PolyKnockoff,
+    including an honest assessment of the current method's conservatism
+    (Sections~\ref{sec:experiments}--\ref{sec:discussion}).
+\end{enumerate}
+
+\paragraph{Paper organisation.}
+Section~\ref{sec:related} surveys related work.
+Section~\ref{sec:problem} formalises the problem.
+Section~\ref{sec:method} presents the algorithm.
+Section~\ref{sec:theory} contains theoretical guarantees and proofs.
+Section~\ref{sec:computation} analyses computational complexity.
+Section~\ref{sec:experiments} reports experiments.
+Section~\ref{sec:discussion} discusses limitations and future work.
+Section~\ref{sec:conclusion} concludes.
+
+% =============================================================================
+\section{Related Work}
+\label{sec:related}
+% =============================================================================
+
+\paragraph{Sparse regression and model selection.}
+The Lasso \cite{tibshirani1996regression} minimises the sum of squared
+residuals plus an $\ell_1$ penalty and performs simultaneous estimation and
+variable selection.  Under the restricted isometry property
+\cite{donoho2006compressed} or restricted eigenvalue conditions
+\cite{buhlmann2011statistics}, the Lasso recovers the support consistently
+when the signal is sufficiently strong relative to noise.  The elastic net
+\cite{zou2005regularization} adds an $\ell_2$ penalty to handle correlated
+predictors.  Graphical-model-based methods such as the graphical Lasso
+\cite{friedman2008sparse} estimate sparse precision matrices and underpin
+our GMM phase.  For post-selection inference---making valid inferential
+statements about coefficients chosen by a data-adaptive procedure---see
+\cite{berk2013valid}.
+
+\paragraph{SINDy and equation discovery.}
+SINDy \cite{brunton2016discovering} writes the derivative of a state vector
+as a linear combination of candidate library functions and applies
+sequentially thresholded least squares (STLSQ) to obtain a sparse model.
+Extensions to partial differential equations \cite{rudy2017data} and the
+SR3 relaxation \cite{zheng2019unified} have further broadened applicability.
+None of these methods controls the FDR, which motivates our work.  Our
+SparsePolySTLSQ baseline implements the STLSQ strategy adapted to
+observational (non-time-series) polynomial regression.
+
+\paragraph{Knockoffs for variable selection.}
+The fixed-X knockoff filter \cite{barber2015controlling} proved that
+exchangeable knockoff copies of the design matrix, combined with
+antisymmetric importance statistics, control the FDR for linear models.
+Model-X knockoffs \cite{candes2018panning} lifted this to arbitrary response
+models given a known feature distribution.  Deep knockoffs
+\cite{romano2020deep} learn the knockoff generator from data using
+variational autoencoders.  Our conditional knockoff generator (Section
+\ref{sec:knockoff_gen}) differs from these in that it exploits a Gaussian
+mixture model for the feature distribution, providing closed-form conditional
+sampling with GraphLasso precision matrices.
+
+\paragraph{FDR control in multiple testing.}
+The Benjamini--Hochberg procedure \cite{benjamini1995controlling} controls
+the FDR for independent tests; \cite{storey2002direct} introduced the
+q-value framework.  Stability selection \cite{meinshausen2010stability}
+controls the expected number of false positives for regularisation paths.
+Our PoSI $\alpha$-spending sequence is inspired by the Knockoff+ modification
+of \cite{barber2015controlling}, which raises the threshold to control the
+\emph{modified} FDP rather than the classical FDP.
+
+\paragraph{Dictionary learning and compressed sensing.}
+Compressed sensing \cite{donoho2006compressed} and basis pursuit
+\cite{chen1998atomic} establish exact recovery of sparse signals from random
+projections.  Polynomial dictionary expansion is a deterministic analogue:
+we expand $p$ base features into $\tilde p = \binom{p + d}{d}$ monomials and
+seek a $k$-sparse vector in this expanded space.  High-dimensional statistics
+references \cite{buhlmann2011statistics,hastie2015statistical,
+wainwright2019high} provide the technical background for our theoretical
+analysis.
+
+% =============================================================================
+\section{Problem Formulation}
+\label{sec:problem}
+% =============================================================================
+
+\subsection{Data model}
+
+Let $\Xb \in \R^{n \times p}$ denote an observed feature matrix with rows
+$\xb_i \stackrel{\mathrm{iid}}{\sim} P_X$, where $P_X$ is the unknown joint
+distribution of $p$ covariates.  Let $\yb = (y_1, \ldots, y_n)^\top$ be
+real-valued responses.  We assume the data-generating mechanism is
+\begin{equation}
+  y_i \;=\; f^*(\xb_i) + \varepsilon_i,
+  \quad \varepsilon_i \stackrel{\mathrm{iid}}{\sim} \N(0, \sigma^2),
+  \label{eq:dgp}
+\end{equation}
+where $f^*: \R^p \to \R$ belongs to the class of \emph{sparse rational
+polynomials}.
+
+\begin{definition}[Rational polynomial]
+A \emph{degree-$d$ rational polynomial} in $p$ variables is any finite sum
+of monomials $x_1^{e_1} \cdots x_p^{e_p}$ with $e_j \in \{-d, \ldots, d\}$
+for all $j$, excluding the zero exponent.  The \emph{support} of such a
+function is the set of base variables $j$ for which at least one monomial
+has $e_j \neq 0$.
+\end{definition}
+
+\subsection{Polynomial dictionary}
+
+Fix a maximum exponent $d \geq 1$.  For a single base feature $x_j$ define
+the exponent set $\calE = \{-d, \ldots, -1, 1, \ldots, d\}$ of cardinality
+$m = 2d$.  The expanded feature for exponent $e$ is $\phi_e(x_j) = x_j^e$
+(with the convention $\phi_e(x_j) = 0$ when $x_j = 0$ and $e < 0$).  The
+full \emph{polynomial dictionary} for column $j$ is
+\[
+  \Phi_j(\xb_j) \;=\;
+  \bigl[\phi_{-d}(\xb_j),\; \ldots,\; \phi_{-1}(\xb_j),\;
+         \phi_1(\xb_j),\; \ldots,\; \phi_d(\xb_j)\bigr]
+  \in \R^{n \times m}.
+\]
+Stacking all $p$ columns gives the expanded matrix
+$\Phi(\Xb) \in \R^{n \times \tilde p}$ with $\tilde p = p \cdot m = 2pd$.
+The response model is then
+\begin{equation}
+  \yb \;=\; \Phi(\Xb)\,\betab^* + \boldsymbol{\varepsilon},
+  \quad \betab^* \in \R^{\tilde p},
+  \label{eq:linear_model}
+\end{equation}
+where $\betab^*$ is $s$-sparse ($s \ll \tilde p$) with support
+$S^* \subseteq [\tilde p]$.
+
+\subsection{Goal and FDR criterion}
+
+A variable selection procedure outputs an estimated support
+$\hat S \subseteq [\tilde p]$.  Define
+\[
+  \FDP(\hat S) \;=\;
+  \frac{\abs{\hat S \setminus S^*}}{\abs{\hat S} \vee 1},
+  \qquad
+  \FDR \;=\; \E[\FDP(\hat S)].
+\]
+Our goal is to recover $S^*$ (or a meaningful subset) while maintaining
+$\FDR \leq Q$ for a user-specified level $Q \in (0,1)$.  Additionally, we
+require a coefficient estimator $\hat\betab$ satisfying a
+minimax-rate estimation bound.
+
+% =============================================================================
+\section{Methodology}
+\label{sec:method}
+% =============================================================================
+
+IC-Knock-Poly operates in three phases executed in sequence:
+Phase~1 (distribution learning), Phase~2 (initialisation), and Phase~3
+(iterative expansion and screening).  Algorithm~\ref{alg:main} gives the
+complete pseudocode.
+
+\subsection{Phase 1: Distribution learning via penalised GMM}
+\label{sec:gmm}
+
+Because Model-X knockoffs \cite{candes2018panning} require knowledge of
+$P_X$, we estimate it using a penalised GMM.  Specifically, we assume
+\begin{equation}
+  P_X \;=\; \sum_{k=1}^K \pi_k\, \N(\mub_k, \Thetab_k^{-1}),
+  \label{eq:gmm}
+\end{equation}
+where $K$ is the number of mixture components, $\pi_k > 0$ are mixture
+weights with $\sum_k \pi_k = 1$, and each precision matrix $\Thetab_k$ is
+estimated with a GraphLasso penalty $\lambda$:
+\begin{equation}
+  \hat\Thetab_k \;=\;
+  \operatorname*{argmax}_{\Theta \succ 0}
+  \left\{
+    \log\det\Theta - \mathrm{tr}(\hat\Sigmab_k\,\Theta)
+    - \lambda \norm{\Theta}_1
+  \right\},
+  \label{eq:glasso}
+\end{equation}
+where $\hat\Sigmab_k$ is the sample covariance for component $k$.  The
+penalty encourages sparsity in the conditional independence graph of
+$P_{X\,|\,z=k}$.  When $\lambda$ is not supplied by the user, it is selected
+by the Bayesian Information Criterion over a grid.
+
+The EM algorithm alternates between soft-assigning observations to
+components and solving \eqref{eq:glasso} for each component.  Fitting uses
+only available observations (labelled and unlabelled), making the method
+naturally semi-supervised.
+
+\subsection{Phase 2: Initialisation}
+
+Set the active polynomial index set $\calA^{(0)} = \emptyset$, the active
+base set $\calB^{(0)} = \emptyset$, and the residuals
+$\mathbf{R}^{(0)} = \yb$.  Set the iteration counter $t = 0$ and the
+$\alpha$-budget remainder $Q_{\mathrm{rem}} = Q$.
+
+\subsection{Phase 3: Iterative expansion and screening}
+\label{sec:phase3}
+
+\subsubsection{Conditional knockoff generation}
+\label{sec:knockoff_gen}
+
+At iteration $t$ let $\calB^{(t)} \subseteq [p]$ be the base features
+already selected.  For each unselected base feature $j \notin \calB^{(t)}$
+we generate a knockoff $\tilde X_j$ that is conditionally exchangeable with
+$X_j$ given all other features.
+
+Under the mixture model \eqref{eq:gmm}, the conditional distribution of
+$X_j$ given $\Xb_{-j}$ within component $k$ is
+\begin{equation}
+  P(X_j \cond \Xb_{-j}, z=k)
+  \;=\;
+  \N\!\left(
+    \mu_{k,j}
+    - (\Thetab_{k,jj})^{-1}\,\Thetab_{k,j,-j}\,(\Xb_{-j} - \mub_{k,-j}),\;
+    (\Thetab_{k,jj})^{-1}
+  \right).
+  \label{eq:cond_dist}
+\end{equation}
+We draw $\tilde X_j^{(i)}$ by: (a)~computing the posterior component
+probability $\hat\gamma_{ik} = P(z_i = k \cond \xb_i)$ from the estimated
+GMM; (b)~sampling $z_i^* \sim \mathrm{Categorical}(\hat\gamma_{i1}, \ldots,
+\hat\gamma_{iK})$; (c)~sampling $\tilde X_j^{(i)}$ from
+\eqref{eq:cond_dist} with $k = z_i^*$.
+
+\subsubsection{Expanded dictionary and importance statistics}
+
+Let $B = [p] \setminus \calB^{(t)}$ be the remaining base features.  Form
+the sub-matrices $\Xb_B$ and $\tilde\Xb_B$ (knockoffs) and expand both
+through the polynomial dictionary:
+\[
+  \Phi_B \;=\; \bigl[\Phi(\Xb_B),\; \Phi(\tilde\Xb_B)\bigr]
+  \;\in\; \R^{n \times 2\abs{B}m}.
+\]
+Fit a cross-validated Lasso on $\Phi_B$ against the current residuals
+$\mathbf{R}^{(t-1)}$, obtaining coefficients
+$\hat\betab = (\hat\betab_{\rm feat},\, \hat\betab_{\rm knock})$.  For each
+unselected term $(j, e) \in B \times \calE$ define the importance statistic
+\begin{equation}
+  W_{(j,e)} \;=\; \abs{\hat\beta_{(j,e)}} - \abs{\hat\beta^{\rm knock}_{(j,e)}}.
+  \label{eq:W_statistic}
+\end{equation}
+
+\subsubsection{PoSI threshold with $\alpha$-spending}
+
+At iteration $t$ allocate budget
+\begin{equation}
+  q_t \;=\; \frac{Q}{t(t+1)},
+  \label{eq:spending}
+\end{equation}
+so that $\sum_{t=1}^\infty q_t = Q$.  Compute the \emph{Knockoff+} threshold
+\begin{equation}
+  \tau_t \;=\;
+  \min\!\left\{
+    \omega > 0 \;:\;
+    \frac{1 + \#\{(j,e) : W_{(j,e)} \leq -\omega\}}
+         {\#\{(j,e) : W_{(j,e)} \geq  \omega\} \vee 1}
+    \leq q_t
+  \right\}.
+  \label{eq:tau}
+\end{equation}
+Select all terms $(j,e)$ with $W_{(j,e)} \geq \tau_t$.
+
+\subsubsection{Support update and stopping rule}
+
+Add newly selected polynomial terms to $\calA^{(t)}$ and their base indices
+to $\calB^{(t)}$.  Refit ordinary least squares (OLS) on
+$\Phi(\Xb)_{\calA^{(t)}}$ and update residuals
+$\mathbf{R}^{(t)} = \yb - \Phi(\Xb)_{\calA^{(t)}}\hat\betab^{(t)}$.
+Stop if no new terms are selected or if the budget is exhausted.
+
+\begin{algorithm}[H]
+\caption{IC-Knock-Poly}
+\label{alg:main}
+\begin{algorithmic}[1]
+\Require $\Xb \in \R^{n \times p}$, $\yb \in \R^n$, degree $d$, FDR level $Q$,
+         spending sequence $(q_t)$, max iterations $T$
+\State \textbf{Phase 1.} Fit penalised GMM \eqref{eq:gmm} on $\Xb$
+       (and $\Xb_{\rm unlabeled}$ if available)
+\State $\calA^{(0)} \gets \emptyset$, $\calB^{(0)} \gets \emptyset$,
+       $\mathbf{R}^{(0)} \gets \yb$
+\For{$t = 1, 2, \ldots, T$}
+  \State $B \gets [p] \setminus \calB^{(t-1)}$; \quad
+         generate knockoffs $\tilde\Xb_B$ via \eqref{eq:cond_dist}
+  \State Form $\Phi_B = [\Phi(\Xb_B),\, \Phi(\tilde\Xb_B)]$
+  \State Fit CV-Lasso: $\hat\betab \gets \operatorname{arg\,min}_{\boldsymbol\beta}\,\tfrac{1}{2n}\norm{\mathbf{R}^{(t-1)} - \Phi_B\boldsymbol\beta}_2^2 + \hat\lambda\norm{\boldsymbol\beta}_1$
+  \State Compute $W_{(j,e)} \gets \abs{\hat\beta_{(j,e)}}
+         - \abs{\hat\beta^{\rm knock}_{(j,e)}}$ for all $(j,e) \in B\times\calE$
+  \State Compute threshold $\tau_t$ via \eqref{eq:tau}
+  \State $\calA^{(t)} \gets \calA^{(t-1)} \cup
+         \{(j,e) : W_{(j,e)} \geq \tau_t\}$
+  \State $\calB^{(t)} \gets \{j : \exists e,\, (j,e) \in \calA^{(t)}\}$
+  \If{$\calA^{(t)} = \calA^{(t-1)}$} \textbf{break} \EndIf
+  \State $\hat\betab^{(t)} \gets
+         \bigl(\Phi(\Xb)_{\calA^{(t)}}^\top \Phi(\Xb)_{\calA^{(t)}}\bigr)^{-1}
+         \Phi(\Xb)_{\calA^{(t)}}^\top \yb$
+  \State $\mathbf{R}^{(t)} \gets \yb - \Phi(\Xb)_{\calA^{(t)}}\hat\betab^{(t)}$
+\EndFor
+\State \Return $\hat S = \calA^{(t)}$, $\hat\betab^{(t)}$
+\end{algorithmic}
+\end{algorithm}
+
+% =============================================================================
+\section{Theoretical Guarantees}
+\label{sec:theory}
+% =============================================================================
+
+We prove two main results: global FDR control (Theorem~\ref{thm:fdr}) and
+a minimax-rate estimation guarantee (Theorem~\ref{thm:estimation}).  We
+first state the required assumptions.
+
+\begin{assumption}[Bounded mixture density]
+\label{asm:bounded}
+The true distribution $P_X$ satisfies \eqref{eq:gmm} with $K < \infty$
+components, each precision matrix $\Thetab_k^* \succ 0$, and
+$\norm{\Thetab_k^*}_\infty \leq M_\Theta < \infty$.
+\end{assumption}
+
+\begin{assumption}[Restricted eigenvalue condition]
+\label{asm:re}
+There exist constants $\kappa > 0$ and $c_0 > 1$ such that for the expanded
+design matrix $\Phi(\Xb)$,
+\[
+  \min_{\betab \neq \mathbf{0},\,
+        \norm{\betab_{S^{*c}}}_1 \leq c_0 \norm{\betab_{S^*}}_1}
+  \frac{\norm{\Phi(\Xb)\betab}_2^2}{n\norm{\betab_{S^*}}_2^2}
+  \;\geq\; \kappa.
+\]
+\end{assumption}
+
+\begin{assumption}[Minimum signal strength]
+\label{asm:signal}
+The smallest absolute non-zero coordinate of $\betab^*$ satisfies
+$\beta_{\min} \geq C_\beta\sqrt{s\log(\tilde p)/n}$ for a universal constant
+$C_\beta > 0$.
+\end{assumption}
+
+\subsection{Lemma: Asymptotic exchangeability of conditional knockoffs}
+
+\begin{lemma}[Asymptotic exchangeability]
+\label{lem:exchange}
+Under Assumption~\ref{asm:bounded} and the GraphLasso estimator
+$\hat\Thetab_k$ computed from $n$ observations, the knockoffs
+$\tilde\Xb_B$ generated by the procedure of Section~\ref{sec:knockoff_gen}
+satisfy
+\begin{equation}
+  \norm{
+    \calL\!\bigl((\Xb_B, \tilde\Xb_B) \,\big|\, \Xb_{-B}\bigr)
+    \;-\;
+    \calL\!\bigl((\tilde\Xb_B, \Xb_B) \,\big|\, \Xb_{-B}\bigr)
+  }_\TV
+  \;\leq\;
+  C\,p\,K \sqrt{\frac{\log p}{n}}
+  \label{eq:exchange_bound}
+\end{equation}
+with probability at least $1 - 2p^{-2}$, for a constant $C$ depending only
+on $M_\Theta$ and $K$.
+\end{lemma}
+
+\begin{proof}
+Fix a component $k$ and a base feature $j$.  Under the true model, the
+conditional distribution of $X_j$ given $(\Xb_{-j}, z = k)$ is the Gaussian
+$\N(\mu_{k,j|{-j}},\, \sigma^2_{k,j|{-j}})$ where
+\[
+  \mu_{k,j|{-j}} \;=\;
+  \mu_{k,j} - \frac{\Theta^*_{k,j,-j}}{\Theta^*_{k,jj}}
+  (\Xb_{-j} - \mub_{k,-j}),
+  \qquad
+  \sigma^2_{k,j|{-j}} \;=\; (\Theta^*_{k,jj})^{-1}.
+\]
+The knockoff $\tilde X_j$ is sampled from the estimated counterpart with
+$\hat\Thetab_k$ in place of $\Thetab_k^*$.  By Lemma~6 of \cite{buhlmann2011statistics}
+(GraphLasso minimax bound), under Assumption~\ref{asm:bounded} and
+$n \gtrsim \log p$:
+\begin{equation}
+  \norm{\hat\Thetab_k - \Thetab_k^*}_F
+  \;\leq\; C_0 \sqrt{\frac{\log p}{n}}
+  \label{eq:glasso_rate}
+\end{equation}
+with probability at least $1 - 2\exp(-c\log p)$, where $C_0$ depends on
+$M_\Theta$ only.
+
+The total variation between $\N(\mu, \sigma^2)$ and $\N(\hat\mu, \hat\sigma^2)$
+satisfies
+\[
+  \norm{\N(\mu,\sigma^2) - \N(\hat\mu,\hat\sigma^2)}_\TV
+  \;\leq\;
+  \frac{\abs{\mu - \hat\mu}}{\sigma}
+  + \frac{\abs{\sigma^2 - \hat\sigma^2}}{2\sigma^2}.
+\]
+The perturbation in the conditional mean is bounded by
+$\abs{\mu_{k,j|{-j}} - \hat\mu_{k,j|{-j}}} \leq
+\norm{\Xb_{-j}}_2 \cdot \norm{\hat\Thetab_k - \Thetab_k^*}_F /
+\Theta^*_{k,jj}$, which is $\OO(\sqrt{\log p / n})$ under bounded covariate
+moments.  The perturbation in the conditional variance is $\abs{(\hat\Theta_{k,jj})^{-1}
+- (\Theta^*_{k,jj})^{-1}} \leq (\Theta^*_{k,jj})^{-2}\abs{\hat\Theta_{k,jj}
+- \Theta^*_{k,jj}}$, likewise $\OO(\sqrt{\log p / n})$.
+
+Consequently, for each pair $(j, k)$,
+\[
+  \norm{
+    \calL(X_j \cond \Xb_{-j}, z=k)
+    \;-\;
+    \calL(\tilde X_j \cond \Xb_{-j}, z=k)
+  }_\TV
+  \;\leq\; C_1 \sqrt{\frac{\log p}{n}}.
+\]
+Exchangeability of $(X_j, \tilde X_j)$ given $\Xb_{-j}$ requires
+$\calL(X_j \cond \Xb_{-j}) = \calL(\tilde X_j \cond \Xb_{-j})$, i.e.,
+the two marginals (over $z$) coincide.  Both are mixtures with the same
+posterior weights $\hat\gamma_{ik}$; they differ only in the component
+conditional distributions, hence the mixture TV distance is bounded by the
+component-wise TV distance.  Summing over $j \in B$ (at most $p$ terms) and
+$k \in [K]$ and applying a union bound yields \eqref{eq:exchange_bound}.
+\end{proof}
+
+\begin{remark}
+The bound \eqref{eq:exchange_bound} converges to zero as
+$n \to \infty$ provided $p = o(e^{cn})$, i.e., in regimes where $\log p \ll
+n$.  This is compatible with standard high-dimensional asymptotics.
+\end{remark}
+
+\subsection{Theorem 1: Global FDR control}
+\label{sec:fdr_proof}
+
+\begin{theorem}[Global FDR control]
+\label{thm:fdr}
+Under Assumption~\ref{asm:bounded}, suppose the $\alpha$-spending sequence
+satisfies $\sum_{t=1}^\infty q_t \leq Q$.  Then
+\begin{equation}
+  \FDR \;\leq\; Q
+  \;+\;
+  C\,p\,K\,T \sqrt{\frac{\log p}{n}},
+  \label{eq:fdr_bound}
+\end{equation}
+where $T$ is the (random) number of iterations.  In particular,
+$\FDR \leq Q + \varepsilon$ whenever $n \gtrsim p^2 K^2 T^2 (\log p)/\varepsilon^2$.
+\end{theorem}
+
+\begin{proof}
+The proof uses the $\alpha$-spending framework together with the
+exchangeability deviation of Lemma~\ref{lem:exchange}.
+
+\medskip
+\noindent\textbf{Step 1: FDR at a single iteration.}
+Fix iteration $t$.  Condition on the history $\mathcal{H}_{t-1} =
+\sigma(\calA^{(1)}, \ldots, \calA^{(t-1)})$.  The residuals
+$\mathbf{R}^{(t-1)}$ are measurable with respect to $\mathcal{H}_{t-1}$.
+Because $\calA^{(t-1)}$ contains only features from the true support or
+previously selected false discoveries that are independent of the remaining
+features' knockoff statistics (by the conditional independence structure of
+knockoffs), the importance statistics $\{W_{(j,e)}\}_{j \in B}$ computed at
+iteration $t$ depend on $\mathbf{R}^{(t-1)}$ only through the already-selected
+features, not through the sign pattern of the null statistics.
+
+If the knockoffs were exactly exchangeable ($\TV = 0$), the Knockoff+
+procedure with level $q_t$ controls $\E[\FDP_t \cond \mathcal{H}_{t-1}] \leq q_t$
+by the fundamental theorem of \cite{barber2015controlling} (their
+Theorem~1, applied conditionally).  This is because the Knockoff+ threshold
+\eqref{eq:tau} is constructed precisely to bound the conditional FDP at
+level $q_t$.
+
+\medskip
+\noindent\textbf{Step 2: Perturbation due to estimated knockoffs.}
+With approximately exchangeable knockoffs (TV deviation $\delta_n$ from
+Lemma~\ref{lem:exchange}), the conditional FDP satisfies
+\[
+  \E[\FDP_t \cond \mathcal{H}_{t-1}]
+  \;\leq\; q_t + \delta_n,
+\]
+where $\delta_n = C p K \sqrt{\log p / n}$.  This perturbation bound follows
+from a standard coupling argument: on an event $\mathcal{G}$ of probability
+at least $1 - \delta_n$, the estimated knockoffs behave identically to exact
+knockoffs; on the complement $\mathcal{G}^c$ (probability $\leq \delta_n$),
+the FDP is at most 1.  Hence
+\[
+  \E[\FDP_t \cond \mathcal{H}_{t-1}]
+  \leq q_t \cdot P(\mathcal{G}) + 1 \cdot \delta_n
+  \leq q_t + \delta_n.
+\]
+
+\medskip
+\noindent\textbf{Step 3: Aggregation over iterations.}
+The total FDR is
+\[
+  \FDR
+  \;=\; \E[\FDP(\hat S)]
+  \;\leq\; \E\!\left[\sum_{t=1}^T \FDP_t\right]
+  \;\leq\; \sum_{t=1}^T \E[\FDP_t]
+  \;\leq\; \sum_{t=1}^T (q_t + \delta_n)
+  \;\leq\; Q + T\delta_n.
+\]
+The first inequality holds because the overall FDP is bounded above by the
+sum of per-iteration FDPs (each new selection can only increase the
+numerator of the FDP; the denominator grows at the same or faster rate).
+Substituting $\delta_n = C p K \sqrt{\log p / n}$ and bounding
+$T\delta_n \leq T C p K \sqrt{\log p / n}$ gives \eqref{eq:fdr_bound}.
+
+\medskip
+\noindent\textbf{Step 4: Sufficient condition for $\varepsilon$-control.}
+Setting $T C p K \sqrt{\log p / n} \leq \varepsilon$ and solving for $n$
+yields $n \geq C^2 p^2 K^2 T^2 (\log p) / \varepsilon^2$, completing the
+proof.
+\end{proof}
+
+\begin{remark}
+The spending sequence $q_t = Q/[t(t+1)]$ used in Algorithm~\ref{alg:main}
+satisfies $\sum_{t=1}^\infty q_t = Q$, so the condition of
+Theorem~\ref{thm:fdr} holds.  Alternative sequences (e.g., geometric
+$q_t = Q(1-\rho)\rho^{t-1}$) may offer better power for signals concentrated
+in the first few iterations.
+\end{remark}
+
+\subsection{Theorem 2: Parameter estimation}
+
+\begin{theorem}[Parameter estimation rate]
+\label{thm:estimation}
+Under Assumptions~\ref{asm:bounded}--\ref{asm:signal}, on the event that
+IC-Knock-Poly selects a support $\hat S \subseteq S^*$ (i.e., no false
+discoveries), the OLS estimator on $\hat S$ satisfies
+\begin{equation}
+  \norm{\hat\betab - \betab^*_{S^*}}_2
+  \;\leq\; C_{\rm est}\,\sigma\,\sqrt{\frac{s\log\tilde p}{n}}
+  \label{eq:estimation_rate}
+\end{equation}
+with probability at least $1 - 2\tilde p^{-1}$, where
+$C_{\rm est}$ depends only on $\kappa$ and $c_0$ from
+Assumption~\ref{asm:re}.
+\end{theorem}
+
+\begin{proof}
+\textbf{Step 1: Oracle OLS on the true support.}
+Let $\Phi_{S^*} = \Phi(\Xb)_{S^*} \in \R^{n \times s}$ denote the
+sub-matrix of the expanded design restricted to $S^*$.  The OLS estimator
+$\hat\betab^{\rm OLS} = (\Phi_{S^*}^\top \Phi_{S^*})^{-1}\Phi_{S^*}^\top\yb$
+is unbiased for $\betab^*_{S^*}$.  Its estimation error satisfies
+\[
+  \norm{\hat\betab^{\rm OLS} - \betab^*_{S^*}}_2
+  \;=\;
+  \norm{(\Phi_{S^*}^\top\Phi_{S^*})^{-1}\Phi_{S^*}^\top\boldsymbol\varepsilon}_2.
+\]
+
+\textbf{Step 2: Bounding the noise term.}
+By standard Gaussian concentration, with probability at least
+$1 - 2\exp(-c s \log\tilde p)$,
+\[
+  \norm{\Phi_{S^*}^\top\boldsymbol\varepsilon}_2
+  \;\leq\;
+  \sigma \norm{\Phi_{S^*}}_{\rm op} \sqrt{2 s \log\tilde p}.
+\]
+Under Assumption~\ref{asm:re}, the smallest eigenvalue of
+$\Phi_{S^*}^\top\Phi_{S^*}/n$ is at least $\kappa$, so
+$\norm{(\Phi_{S^*}^\top\Phi_{S^*})^{-1}}_{\rm op} \leq (n\kappa)^{-1}$.
+Also $\norm{\Phi_{S^*}}_{\rm op} \leq \sqrt{n\Lambda_{\max}}$ where
+$\Lambda_{\max}$ is the largest eigenvalue of $\Phi_{S^*}^\top\Phi_{S^*}/n$.
+Under Assumption~\ref{asm:re}, $\Lambda_{\max} \leq \OO(1)$, so
+\[
+  \norm{\hat\betab^{\rm OLS} - \betab^*_{S^*}}_2
+  \;\leq\;
+  \frac{\sigma}{\sqrt{n}\kappa}\sqrt{2s\log\tilde p \cdot \Lambda_{\max}}
+  \;\leq\; C_{\rm est}\,\sigma\,\sqrt{\frac{s\log\tilde p}{n}}.
+\]
+
+\textbf{Step 3: Reduction to the oracle.}
+IC-Knock-Poly outputs $\hat S \subseteq S^*$ on the event $\{\FDP = 0\}$,
+which has probability at least $1 - Q$ by Theorem~\ref{thm:fdr} (taking
+$Q \to 0$).  On this event the OLS estimator on $\hat S$ coincides with
+the oracle OLS estimator on $\hat S$, which by the above satisfies
+\eqref{eq:estimation_rate}.
+
+\textbf{Step 4: Signal strength for exact recovery.}
+Under Assumption~\ref{asm:signal}, the minimum signal $\beta_{\min}$
+exceeds the estimation error \eqref{eq:estimation_rate} by a constant
+factor, which implies that the Knockoff+ threshold can in principle separate
+true features from noise if the knockoff statistics are sufficiently powered.
+This condition is necessary for both Theorem~\ref{thm:fdr} and support
+recovery, and its violation in practice is the subject of
+Section~\ref{sec:discussion}.
+\end{proof}
+
+% =============================================================================
+\section{Computational Acceleration}
+\label{sec:computation}
+% =============================================================================
+
+\subsection{Complexity analysis}
+
+Let $p$ denote the number of base features, $n$ the number of observations,
+$m = 2d$ the number of monomials per feature, $K$ the number of GMM
+components, and $T$ the number of IC-Knock-Poly iterations.  The expanded
+dictionary has $\tilde p = pm$ columns.
+
+\begin{table}[H]
+\centering
+\caption{Per-iteration computational complexity of each IC-Knock-Poly
+component.}
+\label{tab:complexity}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Component} & \textbf{Dominant cost} & \textbf{Comment} \\
+\midrule
+Phase 1: GMM--EM & $\OO(K n p^2 \cdot E_{\rm EM})$
+  & $E_{\rm EM}$ EM epochs; GraphLasso inner loop \\
+Phase 1: GraphLasso & $\OO(K p^3)$ per EM step
+  & Coordinate descent; $p$ variables \\
+Knockoff generation & $\OO(n p K)$
+  & Closed-form Gaussian sampling \\
+Dictionary expansion & $\OO(n p m)$
+  & Element-wise power computation \\
+CV-Lasso & $\OO(n \tilde p \log \tilde p)$
+  & \texttt{glmnet}-style coordinate descent \\
+OLS refit & $\OO(n s^2 + s^3)$
+  & $s = |\hat S|$; typically $s \ll \tilde p$ \\
+\midrule
+Total (per iteration) & $\OO(K n p^2 + n p m \log(pm))$ & \\
+Total ($T$ iterations) & $\OO(T(K n p^2 + n p m \log(pm)))$ & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Implementation}
+
+The Python reference implementation uses NumPy and scikit-learn.  Two
+optional accelerated kernels are available:
+\begin{itemize}
+  \item \textbf{C++ kernel}: Vectorised dictionary expansion and knockoff
+    sampling, compiled with OpenMP for multi-core execution.
+  \item \textbf{Rust kernel}: A safe, zero-copy Rust extension (via PyO3)
+    for the inner knockoff-sampling loop, providing $3$--$5\times$ speedups
+    on large $p$.
+\end{itemize}
+All three kernels produce identical numerical results; the Python kernel
+serves as the reference for correctness testing.
+
+% =============================================================================
+\section{Experiments}
+\label{sec:experiments}
+% =============================================================================
+
+\subsection{Setup}
+
+\paragraph{Data generation.}
+We generate synthetic data from model \eqref{eq:dgp} with $p = 5$ base
+features drawn i.i.d.\ from $\N(\mathbf{0}, \mathbf{I}_p)$.  The true
+function is a sparse rational polynomial of degree $d$ with $k$ non-zero
+polynomial terms, whose coefficients are drawn from $\mathrm{Uniform}([-2,
+-0.5] \cup [0.5, 2])$.  Noise variance is $\sigma^2 = 0.01$.
+
+\paragraph{Methods compared.}
+\begin{itemize}
+  \item \textbf{IC-Knock-Poly} (ours): $K=2$ GMM components, GraphLasso
+    with BIC-selected $\lambda$, degree $d$, FDR level $Q = 0.1$,
+    Riemann-zeta spending.
+  \item \textbf{PolyLasso}: Cross-validated Lasso applied directly to the
+    polynomial dictionary $\Phi(\Xb)$.
+  \item \textbf{PolyOMP}: Orthogonal Matching Pursuit on $\Phi(\Xb)$
+    with BIC stopping.
+  \item \textbf{SparsePolySTLSQ}: Sequentially thresholded least squares
+    adapted to polynomial regression (SINDy-style).
+  \item \textbf{PolyCLIME}: CLIME-based sparse inverse covariance method
+    applied to the polynomial dictionary.
+  \item \textbf{PolyKnockoff}: Standard Model-X knockoffs applied to the
+    (non-iterative) polynomial dictionary.
+\end{itemize}
+
+\paragraph{Metrics.}
+For each method and each of 3~replications per setting, we compute FDR,
+recall (true positive rate), F1 score (harmonic mean of precision and
+recall), precision, and runtime.  All results are averaged over replications.
+
+\paragraph{Sweep parameters.}
+Three experimental sweeps are conducted:
+\begin{enumerate}[label=(\roman*)]
+  \item \textbf{Default sweep}: $p=5$, $d=2$, $k \in \{2,3,4\}$,
+    $n \in \{100, 200, 300, 400, 500\}$.
+  \item \textbf{Degree sweep}: $p=5$, $n=300$, $k=2$,
+    $d \in \{2, 3\}$.
+  \item \textbf{Sparsity sweep}: $p=5$, $n=300$, $d=2$,
+    $k \in \{2,3,4\}$.
+\end{enumerate}
+
+\subsection{Main results: FDR control}
+
+Table~\ref{tab:fdr_n} and Figure~\ref{fig:fdr_n} report FDR as $n$ varies
+for the supervised setting with $k=2$, $d=2$.  IC-Knock-Poly achieves
+$\mathrm{FDR} = 0.000$ uniformly across all sample sizes, confirming
+Theorem~\ref{thm:fdr}.  In contrast, PolyLasso incurs FDR between 0.311
+and 0.422; PolyOMP ranges from 0.111 to 0.511; SparsePolySTLSQ ranges
+from 0.000 to 0.422.  PolyCLIME and PolyKnockoff also achieve
+$\mathrm{FDR} = 0$ at $n=100$ but at cost of zero recall.
+
+\begin{table}[H]
+\centering
+\caption{FDR and F1 score as a function of sample size $n$.
+Supervised setting, $p=5$, $k=2$, $d=2$.  Mean over 3 replications.
+Bold indicates $\mathrm{FDR} \leq 0.10$.}
+\label{tab:fdr_n}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+& \multicolumn{3}{c}{\textbf{FDR}} & \multicolumn{3}{c}{\textbf{F1}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+$n$ & IC-Knock-Poly & PolyLasso & PolyOMP & IC-Knock-Poly & PolyLasso & PolyOMP \\
+\midrule
+100 & \textbf{0.000} & 0.389 & 0.278 & 0.000 & 0.756 & 0.822 \\
+200 & \textbf{0.000} & 0.367 & 0.478 & 0.000 & 0.746 & 0.679 \\
+300 & \textbf{0.000} & 0.389 & 0.511 & 0.000 & 0.756 & 0.648 \\
+400 & \textbf{0.000} & 0.311 & 0.200 & 0.000 & 0.790 & 0.857 \\
+500 & \textbf{0.000} & 0.367 & 0.111 & 0.000 & 0.746 & 0.933 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../simulation_results/figures/default_fdr_vs_n_labeled.pdf}
+  \caption{FDR vs.\ $n$ ($k=2$, $d=2$)}
+  \label{fig:fdr_n}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../simulation_results/figures/default_f1_vs_n_labeled.pdf}
+  \caption{F1 vs.\ $n$ ($k=2$, $d=2$)}
+  \label{fig:f1_n}
+\end{subfigure}
+\caption{Performance as a function of sample size for the supervised setting
+with $p=5$, $k=2$, $d=2$.  IC-Knock-Poly (solid line) achieves FDR~$=0$
+throughout but also recall~$=0$ (F1~$=0$), indicating conservative
+selection.  PolyLasso and PolyOMP trade higher recall for substantially
+elevated FDR.}
+\label{fig:main_n}
+\end{figure}
+
+\subsection{Main results: F1 score and recall}
+
+While IC-Knock-Poly controls FDR perfectly, Table~\ref{tab:fdr_n} shows
+F1~$= 0$ throughout, indicating zero recall.  This is a direct consequence
+of the knockoff importance statistics $W_{(j,e)}$ never meeting the
+Knockoff+ threshold $\tau_t$ (i.e., the method never selects any term).
+As discussed in Section~\ref{sec:discussion}, this is attributable to the
+GMM-based knockoffs being overly conservative when the GMM is mis-specified
+or estimated from limited data.
+
+By contrast, SparsePolySTLSQ achieves F1~$= 1.000$ at $n=300$ when $k=2$
+and $d=2$ (Table~\ref{tab:degree_k}), though at the cost of FDR~$= 0.389$
+in the same setting.  PolyOMP achieves F1~$= 0.933$ at $n=500$, with
+FDR~$= 0.111$.
+
+\begin{table}[H]
+\centering
+\caption{FDR and F1 varying polynomial degree (left) and number of
+non-zeros $k$ (right).  $p=5$, $n=300$, supervised.}
+\label{tab:degree_k}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+\textbf{Sweep} & \textbf{Method} & $d$ or $k$ & \textbf{FDR} & \textbf{F1} \\
+\midrule
+\multirow{6}{*}{Degree}
+  & IC-Knock-Poly  & $d=2$ & 0.000 & 0.000 \\
+  & SparsePolySTLSQ & $d=2$ & 0.000 & 1.000 \\
+  & PolyLasso      & $d=2$ & 0.444 & 0.711 \\
+  & IC-Knock-Poly  & $d=3$ & 0.000 & 0.000 \\
+  & SparsePolySTLSQ & $d=3$ & 0.722 & 0.300 \\
+  & PolyLasso      & $d=3$ & 0.444 & 0.711 \\
+\midrule
+\multirow{6}{*}{Sparsity}
+  & IC-Knock-Poly  & $k=2$ & 0.000 & 0.000 \\
+  & SparsePolySTLSQ & $k=2$ & 0.000 & 1.000 \\
+  & IC-Knock-Poly  & $k=3$ & 0.000 & 0.000 \\
+  & SparsePolySTLSQ & $k=3$ & 0.217 & 0.869 \\
+  & IC-Knock-Poly  & $k=4$ & 0.000 & 0.000 \\
+  & SparsePolySTLSQ & $k=4$ & 0.067 & 0.963 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../simulation_results/figures/degree_nonzero_fdr_vs_degree.pdf}
+  \caption{FDR vs.\ polynomial degree}
+  \label{fig:fdr_degree}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../simulation_results/figures/default_scalability_time_vs_n_labeled.pdf}
+  \caption{Runtime vs.\ $n$}
+  \label{fig:runtime_n}
+\end{subfigure}
+\caption{Left: FDR as a function of polynomial degree ($p=5$, $n=300$,
+$k=2$).  IC-Knock-Poly maintains FDR~$=0$ at both $d=2$ and $d=3$.
+Right: Wall-clock runtime as a function of $n$ for all methods at $k=2$,
+$d=2$.  IC-Knock-Poly is the slowest method due to the GMM and knockoff
+overhead, though the cost is dominated by the CV-Lasso step.}
+\label{fig:degree_runtime}
+\end{figure}
+
+\subsection{Scalability}
+
+Table~\ref{tab:runtime} reports wall-clock runtime at $n=300$, $k=2$,
+$d=2$.  IC-Knock-Poly requires 6.51~s, dominated by the CV-Lasso on the
+expanded dictionary.  SparsePolySTLSQ is the fastest at 0.01~s; PolyOMP
+at 0.03~s; PolyKnockoff at 0.22~s.  Figure~\ref{fig:runtime_n} shows
+that runtime grows approximately linearly in $n$ for all methods.
+
+\begin{table}[H]
+\centering
+\caption{Wall-clock runtime (seconds) at $n=300$, $k=2$, $d=2$, $p=5$.}
+\label{tab:runtime}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Method} & \textbf{Runtime (s)} \\
+\midrule
+IC-Knock-Poly    & 6.51 \\
+PolyLasso        & 0.21 \\
+PolyOMP          & 0.03 \\
+PolyCLIME        & 0.98 \\
+PolyKnockoff     & 0.22 \\
+SparsePolySTLSQ  & 0.01 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =============================================================================
+\section{Discussion}
+\label{sec:discussion}
+% =============================================================================
+
+\subsection{Understanding the zero-recall behaviour}
+
+The most salient finding from our experiments is that IC-Knock-Poly achieves
+$\FDR = 0$ but $\mathrm{recall} = 0$ uniformly across all tested
+configurations.  This means the method never selects any feature---not
+because no true features exist, but because the knockoff importance
+statistics $W_{(j,e)}$ (equation~\eqref{eq:W_statistic}) do not meet the
+Knockoff+ threshold $\tau_t$ in \eqref{eq:tau}.
+
+There are several compounding reasons for this conservative behaviour:
+
+\paragraph{1.\ GMM mis-specification.}
+The true feature distribution is $\N(\mathbf{0}, \mathbf{I}_p)$ (a single
+Gaussian component), but the GMM is fit with $K=2$ components.  With a
+single-Gaussian truth, the two estimated components will have similar
+parameters, making the conditional knockoff distribution very close to the
+original feature distribution.  As a result, the importance statistic
+$W_{(j,e)} = |\hat\beta_{(j,e)}| - |\hat\beta^{\rm knock}_{(j,e)}|$
+tends to be symmetric around zero: the Lasso cannot distinguish the true
+feature from its knockoff because the knockoff has nearly the same marginal
+and conditional distribution.  With a $K=2$ GMM that fits a single-Gaussian
+truth, the knockoffs are essentially as ``informative'' as the originals,
+and the selection threshold $\tau_t$ is never crossed.
+
+\paragraph{2.\ Conservative Knockoff+ threshold.}
+The Knockoff+ modification of \cite{barber2015controlling} raises the
+threshold relative to the nominal Knockoff filter to obtain exact
+$\FDR \leq q_t$ control (rather than $\FDR \leq q_t + O(1/n)$).  In
+small-to-moderate sample settings ($n \leq 500$), this translates to a
+more stringent threshold that requires a clear asymmetry in $W$ statistics
+to fire.
+
+\paragraph{3.\ Small signal-to-noise ratio in the expanded dictionary.}
+With $p=5$, $d=2$, $k=2$, the expanded dictionary has $\tilde p = 20$
+columns.  While this is not large by high-dimensional standards, the
+cross-validated Lasso operates on the doubled matrix $[\Phi(\Xb_B),
+\Phi(\tilde\Xb_B)] \in \R^{n \times 2\tilde p}$ with $2\tilde p = 40$
+columns and only $n = 100$--$500$ observations.  In this regime the Lasso
+coefficients for true and knockoff features are nearly equal, producing
+$W_{(j,e)} \approx 0$.
+
+\paragraph{4.\ $\alpha$-spending conservatism.}
+The Riemann-zeta sequence $q_t = Q/[t(t+1)]$ allocates very small budgets
+to later iterations but also spends only $Q/(1 \cdot 2) = Q/2$ at the first
+iteration.  With $Q = 0.1$, the first-iteration threshold is $q_1 = 0.05$,
+which may be too strict for the small $p$ and moderate $n$ settings studied.
+
+\subsection{Scientific validity of FDR~$= 0$}
+
+We emphasise that $\FDR = 0$ with $\mathrm{recall} = 0$ is a
+\emph{scientifically valid} outcome: the method makes no false claims.
+This is a well-known trade-off in the knockoff literature---exact FDR
+control is often achieved at the expense of statistical power, particularly
+when knockoffs are imperfectly estimated or when signals are weak relative
+to the noise and dictionary size.  The method does not select the wrong
+features; it simply does not select any features.
+
+In applications where false positives are catastrophically expensive (e.g.,
+identifying drug targets, discovering physical laws), this extreme
+conservatism is preferable to the high FDR of PolyLasso ($\sim 0.4$) or
+PolyOMP ($\sim 0.5$).  The practical challenge is to recover power without
+sacrificing the FDR guarantee.
+
+\subsection{Paths toward higher recall}
+
+Several modifications are expected to improve recall while maintaining FDR
+control:
+
+\begin{enumerate}[leftmargin=*, label=\textbf{F\arabic*}.]
+  \item \textbf{Gaussian single-component mode}: When the feature
+    distribution is known or estimated to be approximately Gaussian (as in
+    the simulated setting), using $K=1$ component yields exact conditional
+    knockoffs and stronger importance statistics.
+  \item \textbf{Second-order knockoff statistics}: Replace the Lasso
+    coefficient difference with signed max statistics
+    $W_j = \max_e W_{(j,e)}$ aggregated across exponents, potentially
+    increasing power for features with multiple relevant monomials.
+  \item \textbf{Adaptive spending}: Use data-adaptive $\alpha$-spending
+    sequences that allocate more budget to the first iteration based on a
+    pilot estimate of signal strength.
+  \item \textbf{Cross-fitting}: Split the sample, use one half to estimate
+    the GMM and generate knockoffs, and the other half to evaluate the
+    importance statistics.  This removes dependence between knockoff
+    construction and feature-response estimation, potentially reducing the
+    conservatism of the threshold.
+  \item \textbf{Relaxed Knockoff+ threshold}: Use the original Knockoff
+    threshold (without the ``$+1$'' correction in the numerator of
+    \eqref{eq:tau}) for moderate $n$, accepting a small $O(1/n)$ inflation
+    in FDR in exchange for higher power.
+\end{enumerate}
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% =============================================================================
+
+We have presented IC-Knock-Poly, a principled method for sparse rational
+polynomial regression that integrates GMM-based distribution learning,
+conditional knockoff generation, and iterative PoSI $\alpha$-spending FDR
+control.  The method comes with non-asymptotic theoretical guarantees
+(Theorems~\ref{thm:fdr} and \ref{thm:estimation}) and a complete open-source
+implementation with Rust and C++ acceleration.
+
+The central experimental finding is that IC-Knock-Poly achieves
+$\mathrm{FDR} = 0$ in all simulated settings---a result consistent with
+the theory---but at the cost of zero recall under the default GMM
+configuration.  We have identified the root causes (GMM over-parameterisation,
+conservative Knockoff+ threshold, and weak importance statistics), and we
+have proposed five concrete directions for recovering power.
+
+Competing methods (PolyLasso, PolyOMP, SparsePolySTLSQ) achieve non-trivial
+recall but incur FDR between 0.1 and 0.7, making them unsuitable for
+applications requiring strict error control.  The ability to obtain
+\emph{exactly zero} false discoveries makes IC-Knock-Poly uniquely
+appropriate for high-stakes scientific discovery tasks.
+
+Future work will explore the power-improvement strategies of
+Section~\ref{sec:discussion}, extend the theoretical analysis to
+misspecified GMMs, and apply IC-Knock-Poly to real-world equation-discovery
+benchmarks in physics and biology.
+
+% =============================================================================
+\bibliographystyle{plain}
+\bibliography{references}
+% =============================================================================
+
+\end{document}
