@@ -152,9 +152,8 @@ This paper makes the following contributions:
     minimax-optimal parameter-estimation guarantee
     (Theorem~\ref{thm:estimation}), together with complete proofs
     (Section~\ref{sec:theory}).
-  \item We provide an open-source Python implementation with CPU-parallel
-    and Rust-accelerated kernels, and a thorough complexity analysis
-    (Section~\ref{sec:computation}).
+  \item We provide an open-source Python implementation and a thorough
+    complexity analysis (Section~\ref{sec:computation}).
   \item We report a comprehensive simulation study comparing IC-Knock-Poly
     with PolyLasso, PolyOMP, SparsePolySTLSQ, PolyCLIME, and PolyKnockoff,
     including an honest assessment of the current method's conservatism
@@ -740,16 +739,15 @@ Section~\ref{sec:discussion}.
 \end{proof}
 
 % =============================================================================
-\section{Computational Acceleration}
+\section{Complexity Analysis}
 \label{sec:computation}
 % =============================================================================
-
-\subsection{Complexity analysis}
 
 Let $p$ denote the number of base features, $n$ the number of observations,
 $m = 2d$ the number of monomials per feature, $K$ the number of GMM
 components, and $T$ the number of IC-Knock-Poly iterations.  The expanded
-dictionary has $\tilde p = pm$ columns.
+dictionary has $\tilde p = pm$ columns.  The implementation uses NumPy and
+scikit-learn throughout; no hardware-specific acceleration is assumed.
 
 \begin{table}[H]
 \centering
@@ -778,20 +776,6 @@ Total ($T$ iterations) & $\OO(T(K n p^2 + n p m \log(pm)))$ & \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\subsection{Implementation}
-
-The Python reference implementation uses NumPy and scikit-learn.  Two
-optional accelerated kernels are available:
-\begin{itemize}
-  \item \textbf{C++ kernel}: Vectorised dictionary expansion and knockoff
-    sampling, compiled with OpenMP for multi-core execution.
-  \item \textbf{Rust kernel}: A safe, zero-copy Rust extension (via PyO3)
-    for the inner knockoff-sampling loop, providing $3$--$5\times$ speedups
-    on large $p$.
-\end{itemize}
-All three kernels produce identical numerical results; the Python kernel
-serves as the reference for correctness testing.
 
 % =============================================================================
 \section{Experiments}
@@ -1092,7 +1076,7 @@ polynomial regression that integrates GMM-based distribution learning,
 conditional knockoff generation, and iterative PoSI $\alpha$-spending FDR
 control.  The method comes with non-asymptotic theoretical guarantees
 (Theorems~\ref{thm:fdr} and \ref{thm:estimation}) and a complete open-source
-implementation with Rust and C++ acceleration.
+Python implementation.
 
 The central experimental finding is that IC-Knock-Poly achieves
 $\mathrm{FDR} = 0$ in all simulated settings---a result consistent with

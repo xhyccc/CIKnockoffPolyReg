@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.3.21)  21 MAR 2026 02:42
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.3.21)  21 MAR 2026 02:46
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -674,28 +674,28 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 [2] [3{/usr/share/texmf/fonts/enc/dvips/lm/lm-mathex.enc}]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 395.
+(hyperref)                removing `math shift' on input line 397.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\alpha' on input line 395.
+(hyperref)                removing `\alpha' on input line 397.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 395.
+(hyperref)                removing `math shift' on input line 397.
 
 [4]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 424.
+put line 432.
  [5]
-Overfull \hbox (4.68591pt too wide) in paragraph at lines 541--549
+Overfull \hbox (4.68591pt too wide) in paragraph at lines 550--558
 \T1/lmr/m/n/10.95 (-20) The per-tur-ba-tion in the con-di-tional mean is bounde
 d by $[] \OMS/lmsy/m/n/10.95 ^^T [][] ^^A [][] \OML/lmm/m/it/10.95 =\OT1/lmr/m/
 n/10.95 (-20) ^^B[]$\T1/lmr/m/n/10.95 (-20) ,
  []
 
 
-Overfull \hbox (9.61946pt too wide) in paragraph at lines 586--589
+Overfull \hbox (9.61946pt too wide) in paragraph at lines 595--598
 \T1/lmr/m/it/10.95 (-20) where $\OML/lmm/m/it/10.95 T$ \T1/lmr/m/it/10.95 (-20)
  is the (ran-dom) num-ber of it-er-a-tions. In par-tic-u-lar, $[] \OMS/lmsy/m/n
 /10.95 ^^T \OML/lmm/m/it/10.95 Q \OT1/lmr/m/n/10.95 (-20) + \OML/lmm/m/it/10.95
@@ -706,7 +706,7 @@ Overfull \hbox (9.61946pt too wide) in paragraph at lines 586--589
  []
 
 
-Overfull \hbox (11.86458pt too wide) in paragraph at lines 596--606
+Overfull \hbox (11.86458pt too wide) in paragraph at lines 605--615
 \T1/lmr/bx/n/10.95 (-20) Step 1: FDR at a sin-gle it-er-a-tion. \T1/lmr/m/n/10.
 95 (-20) Fix it-er-a-tion $\OML/lmm/m/it/10.95 t$\T1/lmr/m/n/10.95 (-20) . Con-
 di-tion on the his-tory $\OMS/lmsy/m/n/10.95 H[] \OT1/lmr/m/n/10.95 (-20) = \OM
@@ -717,7 +717,7 @@ L/lmm/m/it/10.95 ^^[\OT1/lmr/m/n/10.95 (-20) (\OMS/lmsy/m/n/10.95 A[]\OML/lmm/m
 
 [6] [7]
 LaTeX Font Info:    Trying to load font information for T1+lmtt on input line 7
-62.
+70.
  (/usr/share/texmf/tex/latex/lm/t1lmtt.fd
 File: t1lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
@@ -726,38 +726,38 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
  [8]
-<../simulation_results/figures/default_fdr_vs_n_labeled.pdf, id=331, 678.4556pt
+<../simulation_results/figures/default_fdr_vs_n_labeled.pdf, id=326, 678.4556pt
  x 338.56802pt>
 File: ../simulation_results/figures/default_fdr_vs_n_labeled.pdf Graphic file (
 type pdf)
 <use ../simulation_results/figures/default_fdr_vs_n_labeled.pdf>
 Package pdftex.def Info: ../simulation_results/figures/default_fdr_vs_n_labeled
-.pdf  used on input line 868.
+.pdf  used on input line 862.
 (pdftex.def)             Requested size: 232.17242pt x 115.85551pt.
-<../simulation_results/figures/default_f1_vs_n_labeled.pdf, id=332, 678.4556pt 
+<../simulation_results/figures/default_f1_vs_n_labeled.pdf, id=327, 678.4556pt 
 x 338.56802pt>
 File: ../simulation_results/figures/default_f1_vs_n_labeled.pdf Graphic file (t
 ype pdf)
 <use ../simulation_results/figures/default_f1_vs_n_labeled.pdf>
 Package pdftex.def Info: ../simulation_results/figures/default_f1_vs_n_labeled.
-pdf  used on input line 875.
+pdf  used on input line 869.
 (pdftex.def)             Requested size: 232.17242pt x 115.85551pt.
  [9]
-<../simulation_results/figures/degree_nonzero_fdr_vs_degree.pdf, id=349, 678.45
+<../simulation_results/figures/degree_nonzero_fdr_vs_degree.pdf, id=342, 678.45
 56pt x 338.33401pt>
 File: ../simulation_results/figures/degree_nonzero_fdr_vs_degree.pdf Graphic fi
 le (type pdf)
 <use ../simulation_results/figures/degree_nonzero_fdr_vs_degree.pdf>
 Package pdftex.def Info: ../simulation_results/figures/degree_nonzero_fdr_vs_de
-gree.pdf  used on input line 934.
+gree.pdf  used on input line 928.
 (pdftex.def)             Requested size: 232.17242pt x 115.77545pt.
-<../simulation_results/figures/default_scalability_time_vs_n_labeled.pdf, id=35
-0, 678.38907pt x 338.56802pt>
+<../simulation_results/figures/default_scalability_time_vs_n_labeled.pdf, id=34
+3, 678.38907pt x 338.56802pt>
 File: ../simulation_results/figures/default_scalability_time_vs_n_labeled.pdf G
 raphic file (type pdf)
 <use ../simulation_results/figures/default_scalability_time_vs_n_labeled.pdf>
 Package pdftex.def Info: ../simulation_results/figures/default_scalability_time
-_vs_n_labeled.pdf  used on input line 941.
+_vs_n_labeled.pdf  used on input line 935.
 (pdftex.def)             Requested size: 232.17242pt x 115.87102pt.
  [10 <../simulation_results/figures/default_fdr_vs_n_labeled.pdf> <../simulatio
 n_results/figures/default_f1_vs_n_labeled.pdf>] [11 <../simulation_results/figu
@@ -765,11 +765,11 @@ res/degree_nonzero_fdr_vs_degree.pdf> <../simulation_results/figures/default_sc
 alability_time_vs_n_labeled.pdf>]
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 1031.
+(hyperref)                removing `math shift' on input line 1025.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `math shift' on input line 1031.
+(hyperref)                removing `math shift' on input line 1025.
 
 [12] (./main.bbl [13]) [14] (./main.aux)
  ***********
@@ -777,14 +777,14 @@ LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: EB50A3CF4CDFCD0A78335A2713DB6501;5684.
+(rerunfilecheck)             Checksum: D6D0ACEBE18E1F666543D04556C36BC9;5365.
  ) 
 Here is how much of TeX's memory you used:
- 16214 strings out of 476106
- 257624 string characters out of 5793933
- 1944975 words of memory out of 5000000
- 37543 multiletter control sequences out of 15000+600000
- 666458 words of font info for 260 fonts, out of 8000000 for 9000
+ 16206 strings out of 476106
+ 257520 string characters out of 5793933
+ 1945975 words of memory out of 5000000
+ 37541 multiletter control sequences out of 15000+600000
+ 666281 words of font info for 258 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
  75i,11n,79p,1001b,641s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texmf/fonts/type1/public/lm/lmbx10.pfb></usr/share/texmf/fonts/ty
@@ -802,10 +802,10 @@ exmf/fonts/type1/public/lm/lmsy8.pfb></usr/share/texmf/fonts/type1/public/lm/lm
 tt10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msa
 m10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm
 10.pfb>
-Output written on main.pdf (14 pages, 474614 bytes).
+Output written on main.pdf (14 pages, 474787 bytes).
 PDF statistics:
- 702 PDF objects out of 1000 (max. 8388607)
- 473 compressed objects within 5 object streams
- 124 named destinations out of 1000 (max. 500000)
- 56077 words of extra memory for PDF output out of 61914 (max. 10000000)
+ 695 PDF objects out of 1000 (max. 8388607)
+ 466 compressed objects within 5 object streams
+ 122 named destinations out of 1000 (max. 500000)
+ 56061 words of extra memory for PDF output out of 61914 (max. 10000000)
 
