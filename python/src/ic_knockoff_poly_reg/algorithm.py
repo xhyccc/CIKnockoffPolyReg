@@ -325,8 +325,11 @@ class ICKnockoffPolyReg:
             # candidate list (none are active yet within this round).
             active_poly_current: set[int] = set()
 
-            # (e) Knockoff+ threshold
-            tau_t = posi_kernel.knockoff_threshold(W, q_t, active_poly_current)
+            # (e) Knockoff threshold (offset=0: standard knockoff, not knockoff+)
+            # Using offset=1 (knockoff+) combined with the small per-step
+            # alpha-spending budget q_t << Q makes selection practically
+            # impossible, so we use the standard knockoff formula (offset=0).
+            tau_t = posi_kernel.knockoff_threshold(W, q_t, active_poly_current, offset=0)
 
             # (f) Select features with W_j >= tau_t
             if np.isinf(tau_t):
@@ -565,14 +568,22 @@ class ICKnockoffPolyReg:
         Z = self._build_term_matrix(X, selected_terms, poly_dict)
         if Z.shape[1] == 0:
             return np.array([]), float(y.mean())
-        # Use Lasso with small alpha for final fit
+        # Fit Lasso on scaled features for numerical stability, then convert
+        # coefficients back to the original (unscaled) feature space so that
+        # predict() — which applies coef to unscaled Z — is correct.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             lasso = LassoCV(cv=5, max_iter=2000, random_state=self.random_state)
             scaler = StandardScaler()
             Z_sc = scaler.fit_transform(Z)
             lasso.fit(Z_sc, y)
-        return lasso.coef_, lasso.intercept_
+        # coef_raw[j] = coef_scaled[j] / scale[j]
+        # intercept_raw = intercept_scaled - mean[j] / scale[j] * coef_scaled[j]
+        coef_raw = lasso.coef_ / scaler.scale_
+        intercept_raw = float(lasso.intercept_) - float(
+            np.dot(scaler.mean_ / scaler.scale_, lasso.coef_)
+        )
+        return coef_raw, intercept_raw
 
     def _build_term_matrix(
         self,
