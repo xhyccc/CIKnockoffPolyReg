@@ -136,9 +136,10 @@ class SimulationConfig:
 
     def __post_init__(self):
         if not self.label:
+            noise_tag = f"_noise{self.noise_std:.2g}" if self.noise_std != 0.5 else ""
             self.label = (
                 f"p{self.p}_n{self.n_labeled}_k{self.k}"
-                f"_d{self.degree}_{self.setting}"
+                f"_d{self.degree}_{self.setting}{noise_tag}"
             )
 
 
@@ -310,6 +311,7 @@ class SimulationResult:
             "n_labeled": cfg.n_labeled,
             "k": cfg.k,
             "degree": cfg.degree,
+            "noise_std": cfg.noise_std,
             "setting": cfg.setting,
             "method": self.method,
             "fdr_mean": self.fdr_mean,
@@ -746,6 +748,85 @@ def sweep_degree_nonzero_configs(
                             backend=backend,
                         )
                     )
+    return configs
+
+
+def sweep_noise_configs(
+    noise_values: tuple[float, ...] = (0.1, 0.25, 0.5, 1.0, 2.0),
+    p: int = 5,
+    n_labeled: int = 300,
+    k: int = 2,
+    degree: int = 2,
+    settings: tuple[str, ...] = ("supervised",),
+    methods: Optional[list[str]] = None,
+    n_trials: int = 5,
+    Q: float = 0.10,
+    max_iter: int = 10,
+    random_state: int = 0,
+    backend: str = "rust",
+) -> list[SimulationConfig]:
+    """Build sweep configurations varying the label-noise standard deviation.
+
+    Creates one :class:`SimulationConfig` for every combination of
+    ``noise_std × setting`` at fixed ``p``, ``n_labeled``, ``k``, and
+    ``degree``.  Intended for studying how prediction accuracy (R²),
+    FDR, and recall degrade as the noise level increases.
+
+    Parameters
+    ----------
+    noise_values : tuple of float
+        Noise standard-deviation levels to sweep.
+        Default ``(0.1, 0.25, 0.5, 1.0, 2.0)``.
+    p : int
+        Number of base features.  Default 5.
+    n_labeled : int
+        Number of labeled training samples.  Default 300.
+    k : int
+        Sparsity — non-zero polynomial terms in β*.  Default 2.
+    degree : int
+        Maximum polynomial exponent.  Default 2.
+    settings : tuple of str
+        Evaluation settings (default ``("supervised",)``).
+    methods : list of str or None
+        Methods to evaluate.  Default: ``["ic_knock_poly"]``.
+    n_trials : int
+        Trials per configuration (default 5).
+    Q : float
+        Target FDR level (default 0.10).
+    max_iter : int
+        Maximum IC-Knock-Poly iterations (default 10).
+    random_state : int
+        Base random seed (default 0).
+    backend : str
+        Computational kernel for all methods (default ``"rust"``).
+
+    Returns
+    -------
+    list of SimulationConfig
+        One entry per ``noise_std × setting`` combination.
+    """
+    if methods is None:
+        methods = ["ic_knock_poly"]
+
+    configs: list[SimulationConfig] = []
+    for noise_std in noise_values:
+        for setting in settings:
+            configs.append(
+                SimulationConfig(
+                    p=p,
+                    n_labeled=n_labeled,
+                    k=k,
+                    setting=setting,
+                    degree=degree,
+                    noise_std=noise_std,
+                    Q=Q,
+                    n_trials=n_trials,
+                    methods=list(methods),
+                    max_iter=max_iter,
+                    random_state=random_state,
+                    backend=backend,
+                )
+            )
     return configs
 
 

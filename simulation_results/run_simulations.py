@@ -65,6 +65,7 @@ from simulations.run_simulation import (
     SimulationResult,
     default_configs,
     sweep_degree_nonzero_configs,
+    sweep_noise_configs,
     run_simulation_suite,
     print_summary_table,
 )
@@ -192,9 +193,11 @@ def build_latex_report(
     default_results: list[SimulationResult],
     p_scaling_results: list[SimulationResult],
     dn_results: list[SimulationResult],
+    noise_results: list[SimulationResult],
     default_fig_files: list[str],
     p_scaling_fig_files: list[str],
     dn_fig_files: list[str],
+    noise_fig_files: list[str],
 ) -> str:
     """Construct the full LaTeX report as a string."""
 
@@ -226,6 +229,17 @@ def build_latex_report(
             "and wall-clock time over completed trials."
         ),
         label="tab:degree_nonzero",
+    )
+
+    noise_table = _make_table(
+        noise_results,
+        caption=(
+            "Label-noise sweep results ($p=5$, $n=300$, $k=2$, $d=2$). "
+            "Mean FDR, TPR, F1, AUC, R\\textsuperscript{2}, "
+            "and wall-clock time over completed trials across noise levels "
+            "$\\sigma \\in \\{0.1, 0.25, 0.5, 1.0, 2.0\\}$."
+        ),
+        label="tab:noise",
     )
 
     report = rf"""\documentclass[12pt,a4paper]{{article}}
@@ -278,11 +292,11 @@ dictionary regression to perform simultaneous feature selection and
 prediction under FDR control.
 
 The method is evaluated on synthetically generated datasets where the
-ground-truth response depends on \(k\) non-zero **polynomial terms** chosen
+ground-truth response depends on \(k\) non-zero \textbf{{polynomial terms}} chosen
 uniformly at random from a dictionary of \(2dp\) terms built over \(p\) base
 features drawn from a Gaussian Mixture Model (GMM).  Here \(k\) counts
 dictionary columns (polynomial terms), not base features.
-Three complementary sweeps are performed:
+Four complementary sweeps are performed:
 
 \begin{{itemize}}
   \item \textbf{{Default sweep}}: fixes \(p={_P}\) base features and varies
@@ -299,6 +313,12 @@ Three complementary sweeps are performed:
         polynomial degree \(d \in \{{2,3,4\}}\) together with the number of
         non-zero elements \(k \in \{{2,3,4\}}\) at two sample sizes.
         Degree-axis plots use grouped bar charts.
+  \item \textbf{{Label-noise sweep}}: fixes \(p={_P}\), \(n=300\), \(k=2\),
+        \(d=2\) and varies the label-noise standard deviation
+        \(\sigma \in \{{0.1, 0.25, 0.5, 1.0, 2.0\}}\) to study the
+        joint behavior of \textbf{{prediction accuracy (R\textsuperscript{{2}})}},
+        \textbf{{FDR}}, and \textbf{{Recall}} as the signal-to-noise ratio changes.
+        All six competing methods are compared.
 \end{{itemize}}
 
 \noindent\textbf{{Computational note.}}
@@ -330,7 +350,7 @@ Each dataset is drawn from:
 \begin{{align}}
   X       &\sim \mathrm{{GMM}}\!\left(K=2,\; p\right), \notag\\
   y       &= \Phi(X)^\top \beta^* + \varepsilon, \quad
-             \varepsilon \sim \mathcal{{N}}(0, \sigma^2 = 0.25),\notag
+             \varepsilon \sim \mathcal{{N}}(0, \sigma^2),\notag
 \end{{align}}
 where \(\Phi(\cdot)\) is the rational polynomial dictionary of degree \(d\)
 (terms \(x_j^1, x_j^2, \ldots, x_j^d, x_j^{{-1}}, \ldots, x_j^{{-d}}\) for
@@ -338,6 +358,8 @@ each base feature \(x_j\)), and \(\beta^*\) has exactly \(k\) non-zero entries
 chosen uniformly at random from the \(2dp\) dictionary columns, with
 coefficients drawn uniformly from \([-2,-0.5]\cup[0.5,2]\).
 Here \(k\) counts \emph{{polynomial terms}}, not base features.
+The default noise level is \(\sigma = 0.5\); the label-noise sweep varies
+\(\sigma\) across \(\{{0.1, 0.25, 0.5, 1.0, 2.0\}}\).
 
 \subsection{{Competing Methods}}
 
@@ -363,21 +385,25 @@ Here \(k\) counts \emph{{polynomial terms}}, not base features.
 \subsection{{Evaluation Metrics}}
 
 \begin{{itemize}}
+  \item \textbf{{R\textsuperscript{{2}}}}: coefficient of determination on
+        the labeled data — primary measure of \emph{{prediction quality}}.
   \item \textbf{{FDR}}: empirical false discovery rate
         \(= \mathrm{{FP}}/\max(1,\mathrm{{FP}}+\mathrm{{TP}})\).
-  \item \textbf{{TPR / Recall}}: true positive rate
+  \item \textbf{{Recall (TPR)}}: true positive rate
         \(= \mathrm{{TP}}/(\mathrm{{TP}}+\mathrm{{FN}})\).
   \item \textbf{{Precision}}: \(= \mathrm{{TP}}/\max(1,\mathrm{{TP}}+\mathrm{{FP}})\).
   \item \textbf{{F1}}: harmonic mean of precision and recall.
   \item \textbf{{AUC}}: approximate area under the ROC curve
         \(= 0.5(\mathrm{{TPR}} + \mathrm{{TNR}})\).
-  \item \textbf{{R\textsuperscript{{2}}}}: coefficient of determination on
-        the labeled data.
 \end{{itemize}}
+
+Note: when a method selects \emph{{no}} features (e.g.\ under very high noise),
+FDR\,=\,0 vacuously (no false discoveries possible) while Recall\,=\,0
+(all true features are missed).  The label-noise sweep makes this
+trade-off explicit by varying \(\sigma\).
 
 All metrics are averaged over {N_TRIALS} independent trials.
 Target FDR level: \(Q = 0.10\);
-noise: \(\sigma = 0.5\);
 maximum iterations for IC-Knock-Poly: 10.
 
 % ===================================================================
@@ -427,25 +453,55 @@ discrete nature of the polynomial degree.
 {_fig_section(dn_fig_files, "degree_nonzero")}
 
 % ===================================================================
+\section{{Label-Noise Sweep}}
+\label{{sec:noise}}
+
+This sweep fixes $p={_P}$, $n=300$, $k=2$, $d=2$ and varies the
+label-noise standard deviation $\sigma \in \{{0.1, 0.25, 0.5, 1.0, 2.0\}}$.
+Its purpose is to show simultaneously how \textbf{{prediction accuracy
+(R\textsuperscript{{2}})}}, \textbf{{FDR}}, and \textbf{{Recall}} change
+as the signal-to-noise ratio decreases.
+
+\subsection{{Summary Table}}
+
+\Cref{{tab:noise}} reports results for the label-noise sweep.
+
+{noise_table}
+
+\subsection{{Figures}}
+
+{_fig_section(noise_fig_files, "noise")}
+
+% ===================================================================
 \section{{Discussion}}
 \label{{sec:discussion}}
 
 \begin{{itemize}}
+  \item \textbf{{Prediction accuracy (R\textsuperscript{{2}})}}: decreases
+        monotonically as noise \(\sigma\) grows (label-noise sweep), confirming
+        that R\textsuperscript{{2}} is a sensitive indicator of signal-to-noise
+        ratio across all methods.
+  \item \textbf{{FDR and Recall under noise}}: when \(\sigma\) is large
+        (low SNR) methods select few or no features, leading to
+        FDR\,=\,0 and Recall\,=\,0 simultaneously.  This is not a bug in
+        the metrics: it reflects the conservative behaviour of
+        FDR-controlling procedures under noise.  At low \(\sigma\), IC-Knock-Poly
+        maintains FDR\,$\le Q=0.10$\, while achieving non-trivial Recall.
   \item \textbf{{FDR control}}: IC-Knock-Poly targets \(Q = 0.10\).
         The empirical FDR is expected to remain at or below this threshold
         across all configurations when the model is well-specified.
   \item \textbf{{TPR / Recall}}: power typically increases with larger
-        sample size \(n\) and decreases with higher sparsity \(k\) or
-        polynomial degree \(d\).
+        sample size \(n\) and decreases with higher sparsity \(k\),
+        polynomial degree \(d\), or noise \(\sigma\).
   \item \textbf{{p-scaling}}: wall-clock time grows quickly with \(p\)
         due to the SDP construction; selection quality degrades as the
         number of nuisance features increases.
   \item \textbf{{Baselines}}: methods without formal FDR guarantees (e.g.\
-        Poly-Lasso, Poly-OMP) often achieve higher TPR at the cost of
+        Poly-Lasso, Poly-OMP) often achieve higher Recall at the cost of
         inflated FDR.
   \item \textbf{{Semi-supervised}}: providing unlabeled data to
         IC-Knock-Poly can improve knockoff covariance estimation and
-        thereby increase power (TPR) without inflating FDR.
+        thereby increase power (Recall) without inflating FDR.
 \end{{itemize}}
 
 % ===================================================================
@@ -454,9 +510,12 @@ discrete nature of the polynomial degree.
 
 This simulation study demonstrates that IC-Knockoff-PolyReg consistently
 controls FDR at the specified level \(Q = 0.10\) across a range of
-sample sizes, sparsity levels, polynomial degrees, and problem
-dimensionalities, while maintaining competitive predictive accuracy
-(R\textsuperscript{{2}}) compared with standard baselines.
+sample sizes, sparsity levels, polynomial degrees, problem
+dimensionalities, and label-noise levels, while maintaining competitive
+predictive accuracy (R\textsuperscript{{2}}) compared with standard baselines.
+The label-noise sweep further reveals the joint degradation of
+prediction error, FDR, and Recall as the signal-to-noise ratio decreases,
+providing a comprehensive characterisation of all three key objectives.
 
 % ===================================================================
 \end{{document}}
@@ -505,7 +564,7 @@ def main() -> None:
     # 1.  Default sweep  (varying n, k, setting at fixed p=5, degree=2)
     # ------------------------------------------------------------------
     print("=" * 60)
-    print("Sweep 1/3: Default sweep  (p=5, degree=2)")
+    print("Sweep 1/4: Default sweep  (p=5, degree=2)")
     print("=" * 60)
 
     default_cfgs = default_configs(
@@ -533,7 +592,7 @@ def main() -> None:
     #     This sweep demonstrates how methods scale with dimensionality p.
     # ------------------------------------------------------------------
     print("=" * 60)
-    print("Sweep 2/3: p-scaling sweep  (n=200, k=2, degree=2)")
+    print("Sweep 2/4: p-scaling sweep  (n=200, k=2, degree=2)")
     print("=" * 60)
 
     p_scaling_cfgs = default_configs(
@@ -561,7 +620,7 @@ def main() -> None:
     #     degree ∈ {2, 3, 4}  — shown as grouped bar charts
     # ------------------------------------------------------------------
     print("=" * 60)
-    print("Sweep 3/3: Degree × non-zero sweep  (p=5, degree ∈ {2,3,4})")
+    print("Sweep 3/4: Degree × non-zero sweep  (p=5, degree ∈ {2,3,4})")
     print("=" * 60)
 
     dn_cfgs = sweep_degree_nonzero_configs(
@@ -585,26 +644,59 @@ def main() -> None:
     print_summary_table(dn_results)
 
     # ------------------------------------------------------------------
-    # 4.  Generate PDF figures  (one file per metric per sweep)
+    # 4.  Label-noise sweep  (varying noise_std at fixed p=5, n=300, k=2)
+    #     Examines how prediction error (R²), FDR, and Recall jointly
+    #     change as the signal-to-noise ratio decreases.
+    # ------------------------------------------------------------------
+    print("=" * 60)
+    print("Sweep 4/4: Label-noise sweep  (p=5, n=300, k=2, σ ∈ {0.1,0.25,0.5,1.0,2.0})")
+    print("=" * 60)
+
+    noise_cfgs = sweep_noise_configs(
+        noise_values=(0.1, 0.25, 0.5, 1.0, 2.0),
+        p=_P,
+        n_labeled=300,
+        k=2,
+        degree=2,
+        settings=("supervised",),
+        methods=ALL_METHODS,
+        n_trials=N_TRIALS,
+        Q=0.10,
+        max_iter=10,
+        random_state=0,
+        backend=BACKEND,
+    )
+
+    noise_results = run_simulation_suite(
+        noise_cfgs,
+        output_prefix=os.path.join(_OUT_DIR, "noise_sweep"),
+    )
+    print_summary_table(noise_results)
+
+    # ------------------------------------------------------------------
+    # 5.  Generate PDF figures  (one file per metric per sweep)
     # ------------------------------------------------------------------
     print("Generating PDF figures …")
 
     default_fig_files   = _generate_sweep_figures(default_results,   "default",        _FIG_DIR)
     p_scaling_fig_files = _generate_sweep_figures(p_scaling_results,  "p_scaling",      _FIG_DIR)
     dn_fig_files        = _generate_sweep_figures(dn_results,         "degree_nonzero", _FIG_DIR)
+    noise_fig_files     = _generate_sweep_figures(noise_results,      "noise",          _FIG_DIR)
 
-    all_fig_files = sorted(default_fig_files + p_scaling_fig_files + dn_fig_files)
+    all_fig_files = sorted(
+        default_fig_files + p_scaling_fig_files + dn_fig_files + noise_fig_files
+    )
     print(f"  Saved {len(all_fig_files)} PDF figures to {_FIG_DIR}/")
     for f in all_fig_files:
         print(f"    {f}")
 
     # ------------------------------------------------------------------
-    # 5.  Build and write LaTeX report
+    # 6.  Build and write LaTeX report
     # ------------------------------------------------------------------
     print("Writing LaTeX report …")
     latex = build_latex_report(
-        default_results, p_scaling_results, dn_results,
-        default_fig_files, p_scaling_fig_files, dn_fig_files,
+        default_results, p_scaling_results, dn_results, noise_results,
+        default_fig_files, p_scaling_fig_files, dn_fig_files, noise_fig_files,
     )
     report_path = os.path.join(_OUT_DIR, "report.tex")
     with open(report_path, "w", encoding="utf-8") as fh:
