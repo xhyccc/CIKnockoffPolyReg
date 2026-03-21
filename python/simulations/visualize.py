@@ -66,13 +66,14 @@ def _require_matplotlib():
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_VALID_X_FIELDS = ("p", "n_labeled", "k", "degree")
+_VALID_X_FIELDS = ("p", "n_labeled", "k", "degree", "noise_std")
 
 _FIELD_LABELS = {
     "p": "Number of base features (p)",
     "n_labeled": "Number of labeled samples (n)",
     "k": "Non-zero elements (k)",
     "degree": "Polynomial degree",
+    "noise_std": "Label-noise std dev (σ)",
 }
 
 _METHOD_MARKERS = ["o", "s", "^", "D", "v", "<", ">", "P", "*", "X"]

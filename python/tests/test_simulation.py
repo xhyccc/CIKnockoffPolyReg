@@ -32,6 +32,7 @@ from simulations.run_simulation import (
     run_simulation,
     run_simulation_suite,
     sweep_degree_nonzero_configs,
+    sweep_noise_configs,
 )
 
 
@@ -640,3 +641,143 @@ class TestVisualize:
         from simulations.visualize import plot_prediction_error
         with pytest.raises(ValueError, match="x_field must be one of"):
             plot_prediction_error(tiny_results, x_field="invalid_field")
+
+
+# ---------------------------------------------------------------------------
+# sweep_noise_configs
+# ---------------------------------------------------------------------------
+
+class TestSweepNoiseConfigs:
+    def test_returns_list(self):
+        cfgs = sweep_noise_configs(
+            noise_values=(0.1, 0.5, 1.0),
+            n_trials=1,
+        )
+        assert isinstance(cfgs, list)
+        assert len(cfgs) == 3
+
+    def test_noise_values_covered(self):
+        cfgs = sweep_noise_configs(
+            noise_values=(0.1, 0.5, 2.0),
+            n_trials=1,
+        )
+        noises = {c.noise_std for c in cfgs}
+        assert noises == {0.1, 0.5, 2.0}
+
+    def test_default_backend_is_rust(self):
+        cfgs = sweep_noise_configs(noise_values=(0.5,), n_trials=1)
+        assert all(c.backend == "rust" for c in cfgs)
+
+    def test_count_with_settings(self):
+        cfgs = sweep_noise_configs(
+            noise_values=(0.1, 1.0),
+            settings=("supervised", "semi_supervised"),
+            n_trials=1,
+        )
+        # 2 noise × 2 settings = 4 configs
+        assert len(cfgs) == 4
+
+    def test_config_fields(self):
+        cfgs = sweep_noise_configs(
+            noise_values=(0.5,), p=5, n_labeled=200, k=2, degree=2, n_trials=1,
+        )
+        c = cfgs[0]
+        assert c.p == 5
+        assert c.n_labeled == 200
+        assert c.k == 2
+        assert c.degree == 2
+        assert c.noise_std == 0.5
+
+    def test_label_includes_noise_tag_for_nondefault(self):
+        cfgs = sweep_noise_configs(noise_values=(1.0,), n_trials=1)
+        assert "noise" in cfgs[0].label
+
+    def test_label_no_noise_tag_for_default(self):
+        cfgs = sweep_noise_configs(noise_values=(0.5,), n_trials=1)
+        # noise_std=0.5 is the default, should not add a noise tag
+        assert "noise" not in cfgs[0].label
+
+
+# ---------------------------------------------------------------------------
+# noise_std in SimulationResult.to_dict()
+# ---------------------------------------------------------------------------
+
+def _fast_config_python(**kwargs):
+    """Like _fast_config but with backend='python' for environments without Rust."""
+    return SimulationConfig(
+        p=5,
+        n_labeled=80,
+        k=2,
+        setting="supervised",
+        n_unlabeled_ratio=2.0,
+        degree=1,
+        n_components=2,
+        Q=0.20,
+        n_trials=1,
+        methods=["ic_knock_poly"],
+        max_iter=2,
+        random_state=0,
+        backend="python",
+        **kwargs,
+    )
+
+
+class TestNoiseSweepToDict:
+    def test_to_dict_contains_noise_std(self):
+        cfg = _fast_config_python(noise_std=0.3)
+        results = run_simulation(cfg)
+        assert len(results) >= 1
+        d = results[0].to_dict()
+        assert "noise_std" in d
+        assert d["noise_std"] == pytest.approx(0.3)
+
+    def test_to_csv_row_contains_noise_std(self):
+        cfg = _fast_config_python(noise_std=1.0)
+        results = run_simulation(cfg)
+        assert len(results) >= 1
+        row = results[0].to_csv_row()
+        assert "noise_std" in row
+        assert float(row["noise_std"]) == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# noise_std as a valid x_field in visualize
+# ---------------------------------------------------------------------------
+
+class TestVisualizeNoiseSweep:
+    """Verify noise_std can be used as x_field after a noise sweep."""
+
+    @pytest.fixture(autouse=True)
+    def use_agg_backend(self):
+        import matplotlib
+        matplotlib.use("Agg")
+
+    @pytest.fixture
+    def noise_results(self):
+        """Two configs with different noise_std values for plotting."""
+        cfgs = [
+            SimulationConfig(
+                p=5, n_labeled=80, k=2, setting="supervised",
+                degree=1, n_components=2, Q=0.20, noise_std=noise,
+                n_trials=1, methods=["ic_knock_poly"], max_iter=2,
+                random_state=0, backend="python",
+            )
+            for noise in (0.1, 1.0)
+        ]
+        return run_simulation_suite(cfgs, verbose=False)
+
+    def test_plot_prediction_error_noise_std(self, noise_results):
+        import matplotlib.pyplot as plt
+        from simulations.visualize import plot_prediction_error
+        fig, ax = plt.subplots()
+        ax_out = plot_prediction_error(noise_results, x_field="noise_std", ax=ax)
+        assert ax_out is ax
+        plt.close("all")
+
+    def test_plot_all_noise_sweep(self, tmp_path, noise_results):
+        from simulations.visualize import plot_all
+        figs = plot_all(noise_results, output_dir=str(tmp_path), fmt="png", show=False)
+        assert len(figs) > 0
+        # Should have produced at least one noise_std figure
+        assert any("noise_std" in name for name in figs)
+
