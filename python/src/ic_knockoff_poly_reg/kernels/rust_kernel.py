@@ -77,13 +77,13 @@ def _configure_lib(lib: ctypes.CDLL) -> None:
     dbl_p = ctypes.POINTER(ctypes.c_double)
     int_p = ctypes.POINTER(ctypes.c_int)
 
-    lib.ic_poly_n_expanded.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int]
+    lib.ic_poly_n_expanded.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
     lib.ic_poly_n_expanded.restype = ctypes.c_int
 
     lib.ic_poly_expand.argtypes = [
         dbl_p, ctypes.c_int, ctypes.c_int,
-        ctypes.c_int, ctypes.c_int, ctypes.c_double,
-        dbl_p, int_p, int_p,
+        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_double,
+        dbl_p, int_p, int_p, int_p, int_p, int_p, int_p,
     ]
     lib.ic_poly_expand.restype = ctypes.c_int
 
@@ -144,29 +144,35 @@ def _int_ptr(arr: NDArray[np.int32]) -> ctypes.POINTER(ctypes.c_int):
 class RustPolynomialKernel(PolynomialKernel):
     """Polynomial expansion backed by the Rust kernel."""
 
-    def n_expanded(self, n_base: int, degree: int, include_bias: bool) -> int:
-        return _get_lib().ic_poly_n_expanded(n_base, degree, int(include_bias))
+    def n_expanded(self, n_base: int, degree: int, include_bias: bool, include_interactions: bool = True) -> int:
+        return _get_lib().ic_poly_n_expanded(n_base, degree, int(include_bias), int(include_interactions))
 
     def expand(
         self,
         X: NDArray[np.float64],
         degree: int,
         include_bias: bool,
+        include_interactions: bool = True,
         clip_threshold: float = 1e-8,
         base_names: Optional[list[str]] = None,
     ) -> ExpandedFeatures:
         lib = _get_lib()
         X = np.ascontiguousarray(X, dtype=np.float64)
         n, p = X.shape
-        n_cols = lib.ic_poly_n_expanded(p, degree, int(include_bias))
+        n_cols = lib.ic_poly_n_expanded(p, degree, int(include_bias), int(include_interactions))
 
         out_matrix = np.zeros(n * n_cols, dtype=np.float64)
         out_bi = np.zeros(n_cols, dtype=np.int32)
         out_ex = np.zeros(n_cols, dtype=np.int32)
+        out_i1 = np.zeros(n_cols, dtype=np.int32)
+        out_i2 = np.zeros(n_cols, dtype=np.int32)
+        out_e1 = np.zeros(n_cols, dtype=np.int32)
+        out_e2 = np.zeros(n_cols, dtype=np.int32)
 
         ret = lib.ic_poly_expand(
-            _dbl_ptr(X), n, p, degree, int(include_bias), clip_threshold,
-            _dbl_ptr(out_matrix), _int_ptr(out_bi), _int_ptr(out_ex),
+            _dbl_ptr(X), n, p, degree, int(include_bias), int(include_interactions), clip_threshold,
+            _dbl_ptr(out_matrix), _int_ptr(out_bi), _int_ptr(out_ex), 
+            _int_ptr(out_i1), _int_ptr(out_i2), _int_ptr(out_e1), _int_ptr(out_e2),
         )
         if ret < 0:
             raise RuntimeError("ic_poly_expand returned an error")
@@ -174,17 +180,38 @@ class RustPolynomialKernel(PolynomialKernel):
         matrix = out_matrix.reshape(n, n_cols)
         base_indices = out_bi.tolist()
         exponents = out_ex.tolist()
+        i1_list = out_i1.tolist()
+        i2_list = out_i2.tolist()
+        e1_list = out_e1.tolist()
+        e2_list = out_e2.tolist()
+
+        # Build interaction_indices and interaction_exponents lists
+        interaction_indices = []
+        interaction_exponents = []
+        for idx, (i1, i2, e1, e2) in enumerate(zip(i1_list, i2_list, e1_list, e2_list)):
+            if i1 >= 0 and i2 >= 0:
+                interaction_indices.append([int(i1), int(i2)])
+                interaction_exponents.append([int(e1), int(e2)])
+            else:
+                interaction_indices.append(None)
+                interaction_exponents.append(None)
 
         if base_names is None:
             base_names = [f"x{j}" for j in range(p)]
-        names = _build_feature_names(base_names, base_indices, exponents)
+        names = _build_feature_names(base_names, base_indices, exponents, interaction_indices, interaction_exponents)
 
-        return ExpandedFeatures(
+        # Store interaction_exponents in ExpandedFeatures for use by algorithm
+        # We need to add this field to ExpandedFeatures or store it differently
+        result = ExpandedFeatures(
             matrix=matrix,
             feature_names=names,
             base_feature_indices=base_indices,
             power_exponents=exponents,
+            interaction_indices=interaction_indices,
         )
+        # Attach interaction_exponents as an extra attribute
+        result.interaction_exponents = interaction_exponents
+        return result
 
 
 class RustKnockoffKernel(KnockoffKernel):

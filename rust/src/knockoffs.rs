@@ -1,7 +1,8 @@
 //! Knockoff W-statistic computation and Gaussian knockoff sampling.
 //!
-//! The knockoff importance statistic for feature j is:
-//!   W_j = |β̂_j| - |β̂_j̃|
+//! The knockoff importance statistic for feature j uses the Signed Maximum
+//! Magnitude formula to prevent threshold inflation by noise:
+//!   W_j = max(|β̂_j|, |β̂_j̃|) × sign(|β̂_j| - |β̂_j̃|)
 //!
 //! where β̂_j is the Lasso coefficient for the original feature j and β̂_j̃ is
 //! the coefficient for its knockoff copy.
@@ -9,15 +10,14 @@
 //! Also provides equicorrelated Gaussian knockoff sampling for use in
 //! Monte Carlo experiments and baselines.
 
-use crate::matrix::{
-    cholesky, gershgorin_lower_bound, mat_inv_spd, mat_mul, mat_vec, Matrix,
-};
+use crate::matrix::{cholesky, gershgorin_lower_bound, mat_inv_spd, mat_mul, mat_vec, Matrix};
 
 // ---------------------------------------------------------------------------
 // W-statistics
 // ---------------------------------------------------------------------------
 
-/// Compute W_j = |β̂_j| - |β̂_j̃| for all j.
+/// Compute W_j = max(|β̂_j|, |β̂_j̃|) × sign(|β̂_j| - |β̂_j̃|) for all j.
+/// Uses the Signed Maximum Magnitude to prevent threshold inflation by noise.
 ///
 /// # Panics
 /// Panics if `beta_original` and `beta_knockoff` have different lengths.
@@ -30,7 +30,12 @@ pub fn compute_w_statistics(beta_original: &[f64], beta_knockoff: &[f64]) -> Vec
     beta_original
         .iter()
         .zip(beta_knockoff)
-        .map(|(&bo, &bk)| bo.abs() - bk.abs())
+        .map(|(&bo, &bk)| {
+            let abs_bo = bo.abs();
+            let abs_bk = bk.abs();
+            // Use the Signed Maximum Magnitude
+            abs_bo.max(abs_bk) * (abs_bo - abs_bk).signum()
+        })
         .collect()
 }
 
@@ -45,14 +50,15 @@ pub fn compute_w_statistics(beta_original: &[f64], beta_knockoff: &[f64]) -> Vec
 ///
 /// Returns a vector of length `p`.
 pub fn equicorrelated_s_values(sigma: &Matrix, reg: f64) -> Vec<f64> {
-    assert_eq!(sigma.rows, sigma.cols, "equicorrelated_s_values: sigma must be square");
+    assert_eq!(
+        sigma.rows, sigma.cols,
+        "equicorrelated_s_values: sigma must be square"
+    );
     let p = sigma.rows;
     let lb = gershgorin_lower_bound(sigma).max(0.0);
     let base_s = 2.0 * lb;
 
-    let min_diag = (0..p)
-        .map(|j| sigma[(j, j)])
-        .fold(f64::INFINITY, f64::min);
+    let min_diag = (0..p).map(|j| sigma[(j, j)]).fold(f64::INFINITY, f64::min);
 
     let s = (base_s).min(min_diag - reg).max(reg);
     vec![s; p]
@@ -87,8 +93,14 @@ pub fn sample_gaussian_knockoffs(
     let n = x.rows;
     let p = x.cols;
     assert_eq!(mu.len(), p, "sample_gaussian_knockoffs: mu size mismatch");
-    assert_eq!(sigma.rows, p, "sample_gaussian_knockoffs: sigma row mismatch");
-    assert_eq!(sigma.cols, p, "sample_gaussian_knockoffs: sigma col mismatch");
+    assert_eq!(
+        sigma.rows, p,
+        "sample_gaussian_knockoffs: sigma row mismatch"
+    );
+    assert_eq!(
+        sigma.cols, p,
+        "sample_gaussian_knockoffs: sigma col mismatch"
+    );
 
     let s_vals = equicorrelated_s_values(sigma, 1e-8);
 

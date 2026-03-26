@@ -14,8 +14,8 @@ name = "ic_knockoff_poly_reg"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# No external dependencies — uses only the standard library for correctness
-# and portability.
+# rand: random number generation for GMM initialization
+rand = "0.8"
 
 [dev-dependencies]
 # Tests use only the standard library as well.

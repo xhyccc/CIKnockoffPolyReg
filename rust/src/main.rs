@@ -33,7 +33,7 @@ fn main() {
     let mut x = ic_knockoff_poly_reg::matrix::Matrix::new(1, 2, 0.0);
     x[(0, 0)] = 3.0;
     x[(0, 1)] = 2.0;
-    let result = polynomial_expand(&x, 2, true, 1e-8, None);
+    let result = polynomial_expand(&x, 2, true, false, 1e-8, None);
     for (col, info) in result.info.iter().enumerate() {
         println!("   col {:2}: {:10} = {:.4}", col, info.name, result.matrix[(0, col)]);
     }

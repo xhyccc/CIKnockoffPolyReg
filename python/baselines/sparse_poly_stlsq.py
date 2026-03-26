@@ -163,7 +163,7 @@ class SparsePolySTLSQ:
         y: NDArray[np.float64],
         *,
         dataset: str = "",
-        true_base_indices: Optional[set] = None,
+        true_poly_terms: Optional[list] = None,
         elapsed_seconds: float = float("nan"),
         peak_memory_mb: float = float("nan"),
     ) -> ResultBundle:
@@ -187,15 +187,19 @@ class SparsePolySTLSQ:
         n_params = len(coef) + 1
         r2, adj_r2, ss_res, ss_tot, bic, aic = _compute_fit_stats(y, y_pred, n_params)
 
+        # Use polynomial term-level evaluation (CORRECT)
         fdr = tpr = n_tp = n_fp = n_fn = None
-        if true_base_indices is not None:
-            true_set = set(true_base_indices)
-            sel_set = set(sel_base)
-            n_tp = len(sel_set & true_set)
-            n_fp = len(sel_set - true_set)
-            n_fn = len(true_set - sel_set)
-            fdr = n_fp / max(1, len(sel_set))
-            tpr = n_tp / max(1, len(true_set))
+        if true_poly_terms is not None:
+            from ic_knockoff_poly_reg.evaluation import compute_polynomial_term_metrics
+            metrics = compute_polynomial_term_metrics(
+                selected_terms=sel_terms,
+                true_poly_terms=true_poly_terms,
+            )
+            fdr = metrics.fdr
+            tpr = metrics.tpr
+            n_tp = metrics.n_true_positives
+            n_fp = metrics.n_false_positives
+            n_fn = metrics.n_false_negatives
 
         return ResultBundle(
             method="sparse_poly_stlsq",

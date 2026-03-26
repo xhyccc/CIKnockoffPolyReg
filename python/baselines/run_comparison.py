@@ -18,7 +18,7 @@ Usage (Python API)::
     bundle = DataLoader.from_csv("experiment.csv")
     results = run_comparison(
         bundle,
-        true_base_indices={0, 2},   # optional ground truth
+        true_poly_terms={0, 2},   # optional ground truth
         output_prefix="results/exp1",
         degree=2,
         Q=0.10,
@@ -67,7 +67,7 @@ from .sparse_poly_stlsq import SparsePolySTLSQ
 def run_comparison(
     data: DataBundle,
     *,
-    true_base_indices: Optional[set] = None,
+    true_poly_terms: Optional[list] = None,
     output_prefix: Optional[str] = None,
     degree: int = 2,
     n_components: int = 2,
@@ -84,9 +84,9 @@ def run_comparison(
     ----------
     data : DataBundle
         Dataset loaded via ``DataLoader`` (or ``DataLoader.from_arrays``).
-    true_base_indices : set of int or None
-        Ground-truth non-zero base feature indices.  When provided,
-        FDR and TPR are computed for every method.
+    true_poly_terms : list of [int, int] or None
+        Ground-truth polynomial terms as [base_idx, exponent] pairs.  When provided,
+        FDR and TPR are computed for every method based on exact term matches.
     output_prefix : str or None
         File path prefix for output files.  The runner writes:
 
@@ -188,7 +188,7 @@ def run_comparison(
         rb = model.to_result_bundle(
             X, y,
             dataset=dataset_name,
-            true_base_indices=true_base_indices,
+            true_poly_terms=true_poly_terms,
             elapsed_seconds=elapsed,
             peak_memory_mb=peak_mb,
         )
@@ -216,7 +216,7 @@ def run_comparison(
         rb = bl.to_result_bundle(
             X, y,
             dataset=dataset_name,
-            true_base_indices=true_base_indices,
+            true_poly_terms=true_poly_terms,
             elapsed_seconds=elapsed,
             peak_memory_mb=peak / (1024 ** 2),
         )
@@ -244,7 +244,7 @@ def run_comparison(
         rb = bl.to_result_bundle(
             X, y,
             dataset=dataset_name,
-            true_base_indices=true_base_indices,
+            true_poly_terms=true_poly_terms,
             elapsed_seconds=elapsed,
             peak_memory_mb=peak / (1024 ** 2),
         )
@@ -269,7 +269,7 @@ def run_comparison(
         rb = bl.to_result_bundle(
             X, y,
             dataset=dataset_name,
-            true_base_indices=true_base_indices,
+            true_poly_terms=true_poly_terms,
             elapsed_seconds=elapsed,
             peak_memory_mb=peak / (1024 ** 2),
         )
@@ -294,7 +294,7 @@ def run_comparison(
         rb = bl.to_result_bundle(
             X, y,
             dataset=dataset_name,
-            true_base_indices=true_base_indices,
+            true_poly_terms=true_poly_terms,
             elapsed_seconds=elapsed,
             peak_memory_mb=peak / (1024 ** 2),
         )
@@ -322,7 +322,7 @@ def run_comparison(
         rb = bl.to_result_bundle(
             X, y,
             dataset=dataset_name,
-            true_base_indices=true_base_indices,
+            true_poly_terms=true_poly_terms,
             elapsed_seconds=elapsed,
             peak_memory_mb=peak / (1024 ** 2),
         )

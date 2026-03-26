@@ -21,27 +21,38 @@ from .base import KnockoffKernel, PosiKernel, PolynomialKernel
 class PythonPolynomialKernel(PolynomialKernel):
     """Polynomial expansion backed by :class:`~ic_knockoff_poly_reg.polynomial.PolynomialDictionary`."""
 
-    def n_expanded(self, n_base: int, degree: int, include_bias: bool) -> int:
-        return n_base * 2 * degree + (1 if include_bias else 0)
+    def n_expanded(self, n_base: int, degree: int, include_bias: bool, include_interactions: bool = True) -> int:
+        poly = PolynomialDictionary(
+            degree=degree,
+            include_bias=include_bias,
+            include_interactions=include_interactions,
+        )
+        return poly.n_expanded_features(n_base)
 
     def expand(
         self,
         X: NDArray[np.float64],
         degree: int,
         include_bias: bool,
+        include_interactions: bool = True,
         clip_threshold: float = 1e-8,
         base_names: Optional[list[str]] = None,
     ) -> ExpandedFeatures:
         poly = PolynomialDictionary(
             degree=degree,
             include_bias=include_bias,
+            include_interactions=include_interactions,
             clip_threshold=clip_threshold,
         )
         return poly.expand(X, base_names=base_names)
 
 
 class PythonKnockoffKernel(KnockoffKernel):
-    """Knockoff utilities backed by NumPy linear algebra."""
+    """Knockoff utilities backed by NumPy linear algebra.
+
+    W-statistics use the Signed Maximum Magnitude formula:
+    W_j = max(|β_j|, |β̃_j|) × sign(|β_j| - |β̃_j|)
+    """
 
     def w_statistics(
         self,
@@ -52,7 +63,10 @@ class PythonKnockoffKernel(KnockoffKernel):
         beta_knockoff = np.asarray(beta_knockoff, dtype=np.float64)
         if len(beta_original) != len(beta_knockoff):
             raise ValueError("beta_original and beta_knockoff must have the same length")
-        return np.abs(beta_original) - np.abs(beta_knockoff)
+        # Use the Signed Maximum Magnitude to prevent threshold inflation by noise
+        abs_beta_orig = np.abs(beta_original)
+        abs_beta_knock = np.abs(beta_knockoff)
+        return np.maximum(abs_beta_orig, abs_beta_knock) * np.sign(abs_beta_orig - abs_beta_knock)
 
     def equicorrelated_s_values(
         self,

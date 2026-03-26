@@ -35,7 +35,7 @@ class PolynomialKernel(ABC):
     """
 
     @abstractmethod
-    def n_expanded(self, n_base: int, degree: int, include_bias: bool) -> int:
+    def n_expanded(self, n_base: int, degree: int, include_bias: bool, include_interactions: bool = True) -> int:
         """Return the number of columns produced by :meth:`expand`.
 
         Parameters
@@ -46,6 +46,8 @@ class PolynomialKernel(ABC):
             Maximum absolute exponent.
         include_bias : bool
             Whether a constant-1 bias column is included.
+        include_interactions : bool
+            Whether to include interaction terms.
         """
         ...
 
@@ -55,6 +57,7 @@ class PolynomialKernel(ABC):
         X: NDArray[np.float64],
         degree: int,
         include_bias: bool,
+        include_interactions: bool = True,
         clip_threshold: float = 1e-8,
         base_names: Optional[list[str]] = None,
     ) -> ExpandedFeatures:

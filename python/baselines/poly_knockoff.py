@@ -126,8 +126,12 @@ class PolyKnockoff:
         beta_knock = beta[n_feat:]
 
         # --- Step 4: W-stats and knockoff+ threshold ---
-        W = np.abs(beta_orig) - np.abs(beta_knock)
-        tau = compute_knockoff_threshold(W, self.Q)
+        # Use the Signed Maximum Magnitude to prevent threshold inflation by noise
+        abs_beta_orig = np.abs(beta_orig)
+        abs_beta_knock = np.abs(beta_knock)
+        W = np.maximum(abs_beta_orig, abs_beta_knock) * np.sign(abs_beta_orig - abs_beta_knock)
+        # Use offset=0 for standard knockoff (offset=1 is knockoff+, too conservative for ultra-sparse)
+        tau = compute_knockoff_threshold(W, self.Q, offset=0)
         if np.isinf(tau):
             sel_local = np.array([], dtype=int)
         else:
@@ -164,9 +168,11 @@ class PolyKnockoff:
         self,
         X: NDArray[np.float64],
         y: NDArray[np.float64],
+        X_test: Optional[NDArray[np.float64]] = None,
+        y_test: Optional[NDArray[np.float64]] = None,
         *,
         dataset: str = "",
-        true_base_indices: Optional[set] = None,
+        true_poly_terms: Optional[list] = None,
         elapsed_seconds: float = float("nan"),
         peak_memory_mb: float = float("nan"),
     ) -> ResultBundle:
@@ -178,15 +184,39 @@ class PolyKnockoff:
         n_params = len(self._coef) + 1
         r2, adj_r2, ss_res, ss_tot, bic, aic = _compute_fit_stats(y, y_pred, n_params)
 
+        # Use polynomial term-level evaluation (CORRECT)
         fdr = tpr = n_tp = n_fp = n_fn = None
-        if true_base_indices is not None:
-            true_set = set(true_base_indices)
-            sel_set = set(self._sel_base)
-            n_tp = len(sel_set & true_set)
-            n_fp = len(sel_set - true_set)
-            n_fn = len(true_set - sel_set)
-            fdr = n_fp / max(1, len(sel_set))
-            tpr = n_tp / max(1, len(true_set))
+        if true_poly_terms is not None:
+            from ic_knockoff_poly_reg.evaluation import compute_polynomial_term_metrics
+            metrics = compute_polynomial_term_metrics(
+                selected_terms=self._sel_terms,
+                true_poly_terms=true_poly_terms,
+            )
+            fdr = metrics.fdr
+            tpr = metrics.tpr
+            n_tp = metrics.n_true_positives
+            n_fp = metrics.n_false_positives
+            n_fn = metrics.n_false_negatives
+
+        # Compute test set performance if provided
+        test_r2 = test_rmse = test_mae = n_test = None
+        if X_test is not None and y_test is not None:
+            X_test_arr = np.asarray(X_test, dtype=np.float64)
+            y_test_arr = np.asarray(y_test, dtype=np.float64).ravel()
+            y_pred_test = self.predict(X_test_arr)
+
+            # R² on test set
+            ss_res_test = np.sum((y_test_arr - y_pred_test) ** 2)
+            ss_tot_test = np.sum((y_test_arr - np.mean(y_test_arr)) ** 2)
+            test_r2 = 1.0 - ss_res_test / ss_tot_test if ss_tot_test > 0 else float('nan')
+
+            # RMSE
+            test_rmse = np.sqrt(np.mean((y_test_arr - y_pred_test) ** 2))
+
+            # MAE
+            test_mae = np.mean(np.abs(y_test_arr - y_pred_test))
+
+            n_test = len(y_test_arr)
 
         return ResultBundle(
             method="poly_knockoff",
@@ -203,6 +233,10 @@ class PolyKnockoff:
             total_ss=ss_tot,
             bic=bic,
             aic=aic,
+            test_r_squared=test_r2,
+            test_rmse=test_rmse,
+            test_mae=test_mae,
+            n_test=n_test,
             elapsed_seconds=elapsed_seconds,
             peak_memory_mb=peak_memory_mb,
             fdr=fdr,

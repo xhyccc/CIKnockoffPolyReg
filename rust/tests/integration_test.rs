@@ -188,7 +188,7 @@ fn test_matrix_transpose() {
 #[test]
 fn test_poly_expansion_shape() {
     let x = Matrix::new(10, 3, 1.0);
-    let result = polynomial_expand(&x, 2, true, 1e-8, None);
+    let result = polynomial_expand(&x, 2, true, false, 1e-8, None);
     let expected = n_expanded_features(3, 2, true);
     assert_eq!(result.matrix.cols, expected); // 3*2*2 + 1 = 13
     assert_eq!(result.matrix.rows, 10);
@@ -199,7 +199,7 @@ fn test_poly_expansion_shape() {
 fn test_poly_positive_powers() {
     let mut x = Matrix::new(1, 1, 0.0);
     x[(0, 0)] = 3.0;
-    let result = polynomial_expand(&x, 2, false, 1e-8, None);
+    let result = polynomial_expand(&x, 2, false, false, 1e-8, None);
     // Columns: x^1=3, x^2=9, x^(-1)=1/3, x^(-2)=1/9
     assert!((result.matrix[(0, 0)] - 3.0).abs() < 1e-12);
     assert!((result.matrix[(0, 1)] - 9.0).abs() < 1e-12);
@@ -210,7 +210,7 @@ fn test_poly_positive_powers() {
 #[test]
 fn test_poly_bias_is_ones() {
     let x = Matrix::new(5, 2, 2.0);
-    let result = polynomial_expand(&x, 1, true, 1e-8, None);
+    let result = polynomial_expand(&x, 1, true, false, 1e-8, None);
     let last_col = result.matrix.cols - 1;
     assert_eq!(result.info[last_col].name, "1");
     for i in 0..5 {
@@ -222,7 +222,7 @@ fn test_poly_bias_is_ones() {
 fn test_poly_near_zero_clipping_finite() {
     let mut x = Matrix::new(1, 1, 0.0);
     x[(0, 0)] = 0.0;
-    let result = polynomial_expand(&x, 1, false, 1e-8, None);
+    let result = polynomial_expand(&x, 1, false, false, 1e-8, None);
     // Negative power must be finite (clipped, not infinite)
     assert!(result.matrix[(0, 1)].is_finite());
 }
@@ -231,7 +231,7 @@ fn test_poly_near_zero_clipping_finite() {
 #[should_panic]
 fn test_poly_degree_zero_panics() {
     let x = Matrix::new(1, 1, 1.0);
-    polynomial_expand(&x, 0, false, 1e-8, None);
+    polynomial_expand(&x, 0, false, false, 1e-8, None);
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn test_poly_degree_zero_panics() {
 fn test_poly_name_mismatch_panics() {
     let x = Matrix::new(1, 2, 1.0);
     let names = vec!["only_one".to_string()];
-    polynomial_expand(&x, 1, false, 1e-8, Some(&names));
+    polynomial_expand(&x, 1, false, false, 1e-8, Some(&names));
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn test_n_expanded_features() {
 fn test_poly_custom_names() {
     let x = Matrix::new(1, 2, 1.0);
     let names = vec!["foo".to_string(), "bar".to_string()];
-    let result = polynomial_expand(&x, 1, false, 1e-8, Some(&names));
+    let result = polynomial_expand(&x, 1, false, false, 1e-8, Some(&names));
     assert!(result.info[0].name.starts_with("foo"));
     assert!(result.info[2].name.starts_with("bar"));
 }

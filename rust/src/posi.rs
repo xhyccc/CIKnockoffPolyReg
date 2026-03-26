@@ -38,14 +38,12 @@ pub enum SpendingSequence {
 ///
 /// # Panics
 /// Panics if `t < 1`, `q ∉ (0,1)`, or (`sequence == Geometric` and `gamma ∉ (0,1)`).
-pub fn alpha_spending_budget(
-    t: usize,
-    q: f64,
-    sequence: SpendingSequence,
-    gamma: f64,
-) -> f64 {
+pub fn alpha_spending_budget(t: usize, q: f64, sequence: SpendingSequence, gamma: f64) -> f64 {
     assert!(t >= 1, "alpha_spending_budget: t must be >= 1");
-    assert!(q > 0.0 && q < 1.0, "alpha_spending_budget: Q must be in (0,1)");
+    assert!(
+        q > 0.0 && q < 1.0,
+        "alpha_spending_budget: Q must be in (0,1)"
+    );
     match sequence {
         SpendingSequence::RiemannZeta => {
             let t_f = t as f64;
@@ -83,12 +81,7 @@ pub fn alpha_spending_budgets(
 /// - `active_poly`: Set of indices already in the active polynomial set
 ///                  (excluded from computation).
 /// - `offset`:     1 for knockoff+ (default), 0 for standard knockoff.
-pub fn knockoff_threshold(
-    w: &[f64],
-    q_t: f64,
-    active_poly: &HashSet<usize>,
-    offset: i64,
-) -> f64 {
+pub fn knockoff_threshold(w: &[f64], q_t: f64, active_poly: &HashSet<usize>, offset: i64) -> f64 {
     // Candidate W values (excluding active set)
     let w_cand: Vec<f64> = w
         .iter()

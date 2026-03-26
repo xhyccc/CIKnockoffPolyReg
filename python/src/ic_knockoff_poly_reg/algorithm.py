@@ -13,7 +13,7 @@ Main algorithm pipeline implementing all three phases described in the paper:
         (a) Generate conditional knockoffs for unselected base features.
         (b) Expand base features and knockoffs via polynomial dictionary Φ(·).
         (c) Fit cross-validated Lasso on [Φ(X_B), Φ(X̃_B)] predicting R_{t-1}.
-        (d) Compute W_j = |β̂_j| - |β̂_j̃| importance statistics.
+        (d) Compute W_j = max(|β̂_j|, |β̂_j̃|) × sign(|β̂_j| - |β̂_j̃|) importance statistics.
         (e) Compute PoSI threshold τ_t using alpha-spending budget q_t.
         (f) Add selected polynomial terms; update active sets and residuals.
         (g) Stop if no new features selected.
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -31,6 +31,7 @@ from sklearn.linear_model import LassoCV
 from sklearn.preprocessing import StandardScaler
 
 from .gmm_phase import PenalizedGMM
+from .rust_gmm import RustPenalizedGMM
 from .knockoffs import ConditionalKnockoffGenerator
 from .polynomial import PolynomialDictionary
 from .kernels import create_kernels
@@ -144,7 +145,7 @@ class ICKnockoffPolyReg:
         self.backend = backend
 
         # State populated during fit
-        self.gmm_: Optional[PenalizedGMM] = None
+        self.gmm_: Optional[Union[PenalizedGMM, RustPenalizedGMM]] = None
         self.result_: Optional[ICKnockoffPolyResult] = None
 
     # ------------------------------------------------------------------
@@ -215,12 +216,43 @@ class ICKnockoffPolyReg:
         # ----------------------------------------------------------
         # Phase 1: Fit penalised GMM on base features
         # ----------------------------------------------------------
-        self.gmm_ = PenalizedGMM(
-            n_components=self.n_components,
-            alpha=self.gmm_alpha,
-            max_iter=200,
-            random_state=self.random_state,
-        )
+        # Use Rust GMM for "rust" backend (much faster), Python GMM otherwise
+        # Adaptive alpha based on theoretical rate: alpha ~ c * sqrt(log(p)/n)
+        if self.gmm_alpha is not None:
+            alpha = self.gmm_alpha
+        else:
+            # Theoretical rate for Graphical Lasso: lambda ~ c * sqrt(log(p)/n)
+            # Adaptive c based on dimensionality:
+            # - p <= n (standard): c = 0.5 (moderate regularization)
+            # - p > n (high-dim): c = 1.0 (stronger regularization for singular covariance)
+            n_eff = max(n, 10)  # Avoid division by very small n
+            p_eff = max(p, 2)
+            
+            if p_eff <= n_eff:
+                # Standard regime: p <= n
+                c = 0.5
+            else:
+                # High-dimensional regime: p > n
+                # Use stronger regularization (c=1.0) to handle singular sample covariance
+                c = 1.0
+            
+            alpha_theory = c * np.sqrt(np.log(p_eff) / n_eff)
+            # Clamp to reasonable range [0.01, 1.0]
+            alpha = np.clip(alpha_theory, 0.01, 1.0)
+        if self.backend == "rust":
+            self.gmm_ = RustPenalizedGMM(
+                n_components=self.n_components,
+                alpha=alpha,
+                max_iter=200,
+                random_state=self.random_state,
+            )
+        else:
+            self.gmm_ = PenalizedGMM(
+                n_components=self.n_components,
+                alpha=self.gmm_alpha,
+                max_iter=200,
+                random_state=self.random_state,
+            )
         if X_unlabeled is not None:
             X_unlabeled = np.asarray(X_unlabeled, dtype=np.float64)
             if X_unlabeled.ndim != 2 or X_unlabeled.shape[1] != p:
@@ -354,14 +386,35 @@ class ICKnockoffPolyReg:
 
             # Record selected polynomial terms
             for local_idx in new_local_indices:
-                base_j = B_indices[exp_original.base_feature_indices[local_idx]]
+                base_j_raw = exp_original.base_feature_indices[local_idx]
                 exponent = exp_original.power_exponents[local_idx]
                 feat_name = exp_original.feature_names[local_idx]
-                selected_terms.append((int(base_j), exponent))
+                interaction_idx = exp_original.interaction_indices[local_idx]
+                
+                # Store term with interaction info if present
+                if interaction_idx is not None:
+                    # Interaction term: parse exponents from feature name
+                    # Name format: "xi^di*xj^dj" or "xi*xj^dj" etc.
+                    # Parse the actual exponents used
+                    interaction_exponents = self._parse_interaction_exponents(feat_name)
+                    selected_terms.append((int(base_j_raw), exponent, interaction_idx, interaction_exponents))
+                    # Add all involved base features to active_base
+                    for idx in interaction_idx:
+                        if idx >= 0:
+                            active_base.add(int(idx))
+                else:
+                    # Monomial term: map local base index to global base index
+                    # base_j_raw is the index within B_indices for monomials
+                    if base_j_raw >= 0 and base_j_raw < len(B_indices):
+                        base_j = B_indices[base_j_raw]
+                    else:
+                        base_j = base_j_raw  # bias term (=-1)
+                    selected_terms.append((int(base_j), exponent))
+                    # Add the base feature to active_base
+                    if base_j >= 0:
+                        active_base.add(int(base_j))
+                
                 selected_names.append(feat_name)
-                # Add the base feature to active_base
-                if base_j >= 0:
-                    active_base.add(int(base_j))
 
             # Re-fit on all currently selected polynomial features to get residuals
             residuals = self._update_residuals(X, y, selected_terms, poly_dict)
@@ -371,10 +424,28 @@ class ICKnockoffPolyReg:
         # ----------------------------------------------------------
         coef, intercept = self._final_fit(X, y, selected_terms, poly_dict)
 
+        # Build selected_base_indices from selected_terms
+        # Handle both monomials (2-tuple) and interactions (3-tuple)
+        selected_base_set = set()
+        for term in selected_terms:
+            if len(term) == 2:
+                # Monomial: (base_idx, exponent)
+                b = term[0]
+                if b >= 0:
+                    selected_base_set.add(b)
+            elif len(term) == 3:
+                # Interaction: (base_idx, exponent, interaction_indices)
+                # base_idx should be -2 for interactions
+                interaction_indices = term[2]
+                if interaction_indices is not None:
+                    for idx in interaction_indices:
+                        if idx >= 0:
+                            selected_base_set.add(idx)
+        
         self.result_ = ICKnockoffPolyResult(
             selected_poly_indices=set(range(len(selected_terms))),
             selected_poly_names=selected_names,
-            selected_base_indices=set(b for b, _ in selected_terms if b >= 0),
+            selected_base_indices=selected_base_set,
             selected_terms=list(selected_terms),
             coef=coef,
             intercept=intercept,
@@ -417,9 +488,11 @@ class ICKnockoffPolyReg:
         y: NDArray[np.float64],
         *,
         dataset: str = "",
-        true_base_indices: Optional[set] = None,
+        true_poly_terms: Optional[list] = None,
         elapsed_seconds: float = float("nan"),
         peak_memory_mb: float = float("nan"),
+        X_test: Optional[NDArray[np.float64]] = None,
+        y_test: Optional[NDArray[np.float64]] = None,
     ) -> ResultBundle:
         """Convert the fitted result into a ``ResultBundle`` for research output.
 
@@ -429,13 +502,17 @@ class ICKnockoffPolyReg:
         y : (n_samples,) response vector used during ``fit``.
         dataset : str, optional
             Name or path of the dataset (for reporting purposes).
-        true_base_indices : set of int or None, optional
-            Ground-truth set of base feature indices that have non-zero
-            contributions.  When provided, FDR and TPR are computed.
+        true_poly_terms : list of [int, int] or None, optional
+            Ground-truth polynomial terms as [base_idx, exponent] pairs.
+            When provided, FDR and TPR are computed on exact term matches.
         elapsed_seconds : float, optional
             Wall-clock seconds spent in ``fit`` (pass via ``time.perf_counter``).
         peak_memory_mb : float, optional
             Peak memory in MB (pass via ``memory_tracker``).
+        X_test : (n_test, p) feature matrix or None, optional
+            Independent test set for evaluating generalization.
+        y_test : (n_test,) response vector or None, optional
+            True response values for X_test.
 
         Returns
         -------
@@ -454,21 +531,57 @@ class ICKnockoffPolyReg:
         r2, adj_r2, ss_res, ss_tot, bic, aic = _compute_fit_stats(y, y_pred, n_params)
 
         fdr = tpr = n_tp = n_fp = n_fn = None
-        if true_base_indices is not None:
-            true_set = set(true_base_indices)
-            sel_set = set(r.selected_base_indices)
-            n_tp = len(sel_set & true_set)
-            n_fp = len(sel_set - true_set)
-            n_fn = len(true_set - sel_set)
-            fdr = n_fp / max(1, len(sel_set))
-            tpr = n_tp / max(1, len(true_set))
+        if true_poly_terms is not None:
+            # Compare at the polynomial term level [base_idx, exponent]
+            # This is the CORRECT evaluation
+            from .evaluation import compute_polynomial_term_metrics
+            metrics = compute_polynomial_term_metrics(
+                selected_terms=r.selected_terms,
+                true_poly_terms=true_poly_terms,
+            )
+            fdr = metrics.fdr
+            tpr = metrics.tpr
+            n_tp = metrics.n_true_positives
+            n_fp = metrics.n_false_positives
+            n_fn = metrics.n_false_negatives
 
+        # Format selected_terms for ResultBundle (handle both monomials and interactions)
+        formatted_terms = []
+        for term in r.selected_terms:
+            if len(term) == 2:
+                # Monomial: (base_idx, exponent)
+                formatted_terms.append([int(term[0]), int(term[1])])
+            elif len(term) == 3:
+                # Interaction: (base_idx, exponent, interaction_indices)
+                formatted_terms.append([int(term[0]), int(term[1]), term[2]])
+            else:
+                formatted_terms.append(list(term))
+        
+        # Compute test set performance if provided
+        test_r2 = test_rmse = test_mae = n_test = None
+        if X_test is not None and y_test is not None:
+            y_pred_test = self.predict(X_test)
+            y_test_arr = np.asarray(y_test).ravel()
+            
+            # R² on test set
+            ss_res_test = np.sum((y_test_arr - y_pred_test) ** 2)
+            ss_tot_test = np.sum((y_test_arr - np.mean(y_test_arr)) ** 2)
+            test_r2 = 1.0 - ss_res_test / ss_tot_test if ss_tot_test > 0 else float('nan')
+            
+            # RMSE
+            test_rmse = np.sqrt(np.mean((y_test_arr - y_pred_test) ** 2))
+            
+            # MAE
+            test_mae = np.mean(np.abs(y_test_arr - y_pred_test))
+            
+            n_test = len(y_test_arr)
+        
         return ResultBundle(
             method="ic_knock_poly",
             dataset=dataset,
             selected_names=list(r.selected_poly_names),
             selected_base_indices=sorted(r.selected_base_indices),
-            selected_terms=[[int(b), int(e)] for b, e in r.selected_terms],
+            selected_terms=formatted_terms,
             coef=list(r.coef),
             intercept=float(r.intercept),
             n_selected=len(r.selected_terms),
@@ -485,6 +598,10 @@ class ICKnockoffPolyReg:
             n_true_positives=n_tp,
             n_false_positives=n_fp,
             n_false_negatives=n_fn,
+            test_r_squared=test_r2,
+            test_rmse=test_rmse,
+            test_mae=test_mae,
+            n_test=n_test,
             params={
                 "degree": self.degree,
                 "n_components": self.n_components,
@@ -588,26 +705,197 @@ class ICKnockoffPolyReg:
     def _build_term_matrix(
         self,
         X: NDArray[np.float64],
-        selected_terms: list[tuple[int, int]],
+        selected_terms: list,
         poly_dict: PolynomialDictionary,
     ) -> NDArray[np.float64]:
-        """Build feature matrix from (base_idx, exponent) pairs."""
+        """Build feature matrix from selected terms.
+        
+        selected_terms can be:
+        - (base_idx, exponent): monomial term x_base^exp
+        - (base_idx, exponent, interaction_indices, interaction_exponents): interaction term
+          where base_idx=-2, interaction_indices=[i,j], interaction_exponents=[di,dj]
+        """
         if not selected_terms:
             return np.zeros((X.shape[0], 0))
         columns = []
-        for base_j, exp in selected_terms:
-            if base_j < 0:
-                columns.append(np.ones(X.shape[0]))
+        for term in selected_terms:
+            if len(term) == 2:
+                # Monomial term: (base_idx, exponent)
+                base_j, exp = term
+                if base_j < 0:
+                    columns.append(np.ones(X.shape[0]))
+                else:
+                    xj = X[:, base_j]
+                    xj_safe = np.where(
+                        np.abs(xj) < poly_dict.clip_threshold,
+                        np.sign(xj + 1e-300) * poly_dict.clip_threshold,
+                        xj,
+                    )
+                    columns.append(xj_safe ** exp)
+            elif len(term) >= 3:
+                # Interaction term: (base_idx, exponent, interaction_indices, interaction_exponents)
+                base_j, exp = term[0], term[1]
+                interaction_indices = term[2] if len(term) > 2 else None
+                interaction_exponents = term[3] if len(term) > 3 else None
+                
+                if base_j == -2 and interaction_indices is not None and len(interaction_indices) >= 2:
+                    # Build interaction term: product of monomials with correct exponents
+                    X_safe = poly_dict._safe_clip(X)
+                    result = np.ones(X.shape[0])
+                    
+                    for idx, feat_idx in enumerate(interaction_indices):
+                        xi = X_safe[:, feat_idx]
+                        # Use the stored exponent if available, otherwise default to 1
+                        if interaction_exponents is not None and idx < len(interaction_exponents):
+                            exp_i = interaction_exponents[idx]
+                        else:
+                            exp_i = 1
+                        result = result * (xi ** exp_i)
+                    columns.append(result)
+                else:
+                    columns.append(np.ones(X.shape[0]))
             else:
-                xj = X[:, base_j]
-                xj_safe = np.where(
-                    np.abs(xj) < poly_dict.clip_threshold,
-                    np.sign(xj + 1e-300) * poly_dict.clip_threshold,
-                    xj,
-                )
-                columns.append(xj_safe ** exp)
+                columns.append(np.ones(X.shape[0]))
         return np.column_stack(columns)
 
+    def _parse_interaction_exponents(self, feat_name: str) -> list[int]:
+        """Parse individual exponents from interaction feature name.
+        
+        Name format: "xi^di*xj^dj" or "xi*xj^dj" or "~xi^di*xj^dj" (knockoffs) etc.
+        Returns list of exponents [di, dj, ...].
+        """
+        import re
+        # Remove leading ~ for knockoff feature names
+        feat_name_clean = feat_name.lstrip('~')
+        parts = feat_name_clean.split('*')
+        exponents = []
+        for part in parts:
+            # Match pattern like "x0^2" or "x0^(-1)" or just "x0"
+            # Handle optional ~ prefix, then x(\d+) captures the feature index
+            match = re.match(r'~?x\d+(?:\^\(?(-?\d+)\)?)?', part)
+            if match:
+                exp_str = match.group(1)
+                if exp_str is None:
+                    exp = 1  # No exponent means ^1
+                else:
+                    exp = int(exp_str)
+                exponents.append(exp)
+        return exponents
+
+    def fit_with_cv(
+        self,
+        X: NDArray[np.float64],
+        y: NDArray[np.float64],
+        *,
+        Q_candidates: Optional[list[float]] = None,
+        cv: int = 5,
+        X_unlabeled: Optional[NDArray[np.float64]] = None,
+    ) -> "ICKnockoffPolyReg":
+        """Fit with cross-validation to select optimal Q.
+        
+        Uses k-fold cross-validation on the training set to select the Q value
+        that maximizes validation R². This makes the comparison with Poly-Lasso
+        more fair since both use CV for hyperparameter tuning.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_labeled, p)
+            Labeled feature matrix.
+        y : array-like of shape (n_labeled,)
+            Response vector.
+        Q_candidates : list of float or None, optional
+            List of Q values to try. Default: [0.05, 0.08, 0.10, 0.12, 0.15, 0.20].
+        cv : int, optional
+            Number of CV folds. Default 5.
+        X_unlabeled : array-like of shape (N_unlabeled, p) or None, optional
+            Additional unlabeled observations for GMM fitting.
+            
+        Returns
+        -------
+        self
+            Fitted with best Q from CV.
+        """
+        from sklearn.model_selection import KFold
+        
+        if Q_candidates is None:
+            Q_candidates = [0.05, 0.08, 0.10, 0.12, 0.15, 0.20]
+        
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64).ravel()
+        n = X.shape[0]
+        
+        # Store original Q
+        original_Q = self.Q
+        
+        # CV to select best Q
+        best_Q = None
+        best_val_r2 = -float('inf')
+        
+        kf = KFold(n_splits=cv, shuffle=True, random_state=self.random_state)
+        
+        print(f"\nPerforming {cv}-fold CV to select Q from {Q_candidates}")
+        print("-" * 60)
+        
+        for Q in Q_candidates:
+            val_r2_scores = []
+            
+            for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
+                X_train, X_val = X[train_idx], X[val_idx]
+                y_train, y_val = y[train_idx], y[val_idx]
+                
+                # Create temporary model with this Q
+                temp_model = ICKnockoffPolyReg(
+                    degree=self.degree,
+                    n_components=self.n_components,
+                    gmm_alpha=self.gmm_alpha,
+                    Q=Q,
+                    spending_sequence=self.spending_sequence,
+                    gamma=self.gamma,
+                    max_iter=self.max_iter,
+                    include_bias=self.include_bias,
+                    random_state=self.random_state,
+                    backend=self.backend,
+                )
+                
+                # Fit on training fold
+                try:
+                    if X_unlabeled is not None:
+                        # Use unlabeled data for GMM
+                        temp_model.fit(X_train, y_train, X_unlabeled=X_unlabeled)
+                    else:
+                        temp_model.fit(X_train, y_train)
+                    
+                    # Predict on validation fold
+                    y_val_pred = temp_model.predict(X_val)
+                    
+                    # Compute validation R²
+                    ss_res = np.sum((y_val - y_val_pred) ** 2)
+                    ss_tot = np.sum((y_val - np.mean(y_val)) ** 2)
+                    val_r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+                    val_r2_scores.append(val_r2)
+                    
+                except Exception as e:
+                    # If fitting fails, assign poor score
+                    val_r2_scores.append(-999.0)
+            
+            # Average validation R² across folds
+            mean_val_r2 = np.mean(val_r2_scores)
+            print(f"  Q={Q:.2f}: mean val R²={mean_val_r2:.4f}")
+            
+            if mean_val_r2 > best_val_r2:
+                best_val_r2 = mean_val_r2
+                best_Q = Q
+        
+        print(f"\n✓ Selected Q={best_Q:.2f} (best validation R²={best_val_r2:.4f})")
+        print("-" * 60)
+        
+        # Fit final model with best Q
+        self.Q = best_Q
+        if X_unlabeled is not None:
+            return self.fit(X, y, X_unlabeled=X_unlabeled)
+        else:
+            return self.fit(X, y)
+    
     def _check_fitted(self) -> None:
         if self.result_ is None:
             raise RuntimeError(

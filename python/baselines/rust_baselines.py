@@ -148,7 +148,7 @@ def _build_result_bundle(
     base_indices: NDArray[np.int32],
     exponents: NDArray[np.int32],
     dataset: str,
-    true_base_indices: Optional[set],
+    true_poly_terms: Optional[list],
     elapsed_seconds: float,
     peak_memory_mb: float,
 ) -> ResultBundle:
@@ -190,16 +190,20 @@ def _build_result_bundle(
         for b, e in sel_terms
     ]
 
-    # FDR / TPR (if ground truth provided)
+    # FDR / TPR (if ground truth provided) - use polynomial term-level evaluation
     fdr = tpr = None
     n_tp = n_fp = n_fn = None
-    if true_base_indices is not None:
-        selected_base_set = set(sel_unique_base)
-        n_tp = len(selected_base_set & true_base_indices)
-        n_fp = len(selected_base_set - true_base_indices)
-        n_fn = len(true_base_indices - selected_base_set)
-        fdr = n_fp / max(1, n_tp + n_fp)
-        tpr = n_tp / max(1, n_tp + n_fn)
+    if true_poly_terms is not None:
+        from ic_knockoff_poly_reg.evaluation import compute_polynomial_term_metrics
+        metrics = compute_polynomial_term_metrics(
+            selected_terms=sel_terms,
+            true_poly_terms=true_poly_terms,
+        )
+        fdr = metrics.fdr
+        tpr = metrics.tpr
+        n_tp = metrics.n_true_positives
+        n_fp = metrics.n_false_positives
+        n_fn = metrics.n_false_negatives
 
     return ResultBundle(
         method=method,
@@ -288,17 +292,30 @@ class RustPolyLasso:
         y: NDArray[np.float64],
         *,
         dataset: str = "",
-        true_base_indices: Optional[set] = None,
+        true_poly_terms: Optional[list] = None,
         elapsed_seconds: float = 0.0,
         peak_memory_mb: float = 0.0,
     ) -> ResultBundle:
+        """Build a result bundle from the fitted model.
+        
+        Args:
+            X: Feature matrix.
+            y: Target vector.
+            dataset: Dataset name.
+            true_poly_terms: Ground-truth polynomial terms as [base_idx, exponent] pairs.
+            elapsed_seconds: Elapsed time in seconds.
+            peak_memory_mb: Peak memory usage in MB.
+        
+        Returns:
+            ResultBundle containing the fitted model results.
+        """
         if self._coef_all is None:
             raise RuntimeError("Call fit() first")
         return _build_result_bundle(
             "poly_lasso", X, np.asarray(y).ravel(), self.degree,
             self._coef_all, self._intercept,
             self._base_indices, self._exponents,
-            dataset, true_base_indices, elapsed_seconds, peak_memory_mb,
+            dataset, true_poly_terms, elapsed_seconds, peak_memory_mb,
         )
 
 
@@ -361,17 +378,30 @@ class RustPolyOMP:
         y: NDArray[np.float64],
         *,
         dataset: str = "",
-        true_base_indices: Optional[set] = None,
+        true_poly_terms: Optional[list] = None,
         elapsed_seconds: float = 0.0,
         peak_memory_mb: float = 0.0,
     ) -> ResultBundle:
+        """Build a result bundle from the fitted model.
+        
+        Args:
+            X: Feature matrix.
+            y: Target vector.
+            dataset: Dataset name.
+            true_poly_terms: Ground-truth polynomial terms as [base_idx, exponent] pairs.
+            elapsed_seconds: Elapsed time in seconds.
+            peak_memory_mb: Peak memory usage in MB.
+        
+        Returns:
+            ResultBundle containing the fitted model results.
+        """
         if self._coef_all is None:
             raise RuntimeError("Call fit() first")
         return _build_result_bundle(
             "poly_omp", X, np.asarray(y).ravel(), self.degree,
             self._coef_all, self._intercept,
             self._base_indices, self._exponents,
-            dataset, true_base_indices, elapsed_seconds, peak_memory_mb,
+            dataset, true_poly_terms, elapsed_seconds, peak_memory_mb,
         )
 
 
@@ -434,15 +464,28 @@ class RustSparsePolySTLSQ:
         y: NDArray[np.float64],
         *,
         dataset: str = "",
-        true_base_indices: Optional[set] = None,
+        true_poly_terms: Optional[list] = None,
         elapsed_seconds: float = 0.0,
         peak_memory_mb: float = 0.0,
     ) -> ResultBundle:
+        """Build a result bundle from the fitted model.
+        
+        Args:
+            X: Feature matrix.
+            y: Target vector.
+            dataset: Dataset name.
+            true_poly_terms: Ground-truth polynomial terms as [base_idx, exponent] pairs.
+            elapsed_seconds: Elapsed time in seconds.
+            peak_memory_mb: Peak memory usage in MB.
+        
+        Returns:
+            ResultBundle containing the fitted model results.
+        """
         if self._coef_all is None:
             raise RuntimeError("Call fit() first")
         return _build_result_bundle(
             "sparse_poly_stlsq", X, np.asarray(y).ravel(), self.degree,
             self._coef_all, self._intercept,
             self._base_indices, self._exponents,
-            dataset, true_base_indices, elapsed_seconds, peak_memory_mb,
+            dataset, true_poly_terms, elapsed_seconds, peak_memory_mb,
         )

@@ -60,24 +60,39 @@ unsafe fn matrix_from_raw(ptr: *const f64, rows: usize, cols: usize) -> Matrix {
 /// Return the number of expanded columns for `n_base` base features.
 ///
 /// # Arguments
-/// - `n_base`       – Number of base features.
-/// - `degree`       – Maximum absolute exponent.
-/// - `include_bias` – 1 to include a bias column, 0 otherwise.
+/// - `n_base`               – Number of base features.
+/// - `degree`               – Maximum absolute exponent.
+/// - `include_bias`         – 1 to include a bias column, 0 otherwise.
+/// - `include_interactions` – 1 to include interaction terms, 0 otherwise.
 #[no_mangle]
-pub extern "C" fn ic_poly_n_expanded(n_base: i32, degree: i32, include_bias: i32) -> i32 {
-    n_expanded_features(n_base as usize, degree as u32, include_bias != 0) as i32
+pub extern "C" fn ic_poly_n_expanded(
+    n_base: i32,
+    degree: i32,
+    include_bias: i32,
+    include_interactions: i32,
+) -> i32 {
+    n_expanded_features(
+        n_base as usize,
+        degree as u32,
+        include_bias != 0,
+        include_interactions != 0,
+    ) as i32
 }
 
-/// Expand `X` (row-major, n×p) via rational polynomial dictionary Φ.
+/// Expand `X` (row-major, n×p) via rational polynomial dictionary Φ with optional interactions.
 ///
-/// Fills `out_matrix` (n × n_cols, row-major), `out_base_indices` and
-/// `out_exponents` (both of length n_cols).  Returns n_cols on success or
-/// -1 on error.
+/// Fills `out_matrix` (n × n_cols, row-major), `out_base_indices`,
+/// `out_exponents`, and interaction info (all of length n_cols).
+/// Returns n_cols on success or -1 on error.
 ///
 /// Callers must pre-allocate:
-/// - `out_matrix`:       `n * ic_poly_n_expanded(p, degree, include_bias)` doubles
-/// - `out_base_indices`: `ic_poly_n_expanded(p, degree, include_bias)` ints
-/// - `out_exponents`:    `ic_poly_n_expanded(p, degree, include_bias)` ints
+/// - `out_matrix`:       `n * ic_poly_n_expanded(p, degree, include_bias, include_interactions)` doubles
+/// - `out_base_indices`: `ic_poly_n_expanded(p, degree, include_bias, include_interactions)` ints
+/// - `out_exponents`:    `ic_poly_n_expanded(p, degree, include_bias, include_interactions)` ints
+/// - `out_interaction_idx1`: `ic_poly_n_expanded(...)` ints (set to -1 for non-interactions)
+/// - `out_interaction_idx2`: `ic_poly_n_expanded(...)` ints (set to -1 for non-interactions)
+/// - `out_interaction_exp1`: `ic_poly_n_expanded(...)` ints (exponent for idx1, 0 for non-interactions)
+/// - `out_interaction_exp2`: `ic_poly_n_expanded(...)` ints (exponent for idx2, 0 for non-interactions)
 ///
 /// # Safety
 /// All pointer arguments must be non-null and point to sufficient memory.
@@ -88,12 +103,23 @@ pub unsafe extern "C" fn ic_poly_expand(
     p: i32,
     degree: i32,
     include_bias: i32,
+    include_interactions: i32,
     clip_threshold: f64,
     out_matrix: *mut f64,
     out_base_indices: *mut i32,
     out_exponents: *mut i32,
+    out_interaction_idx1: *mut i32,
+    out_interaction_idx2: *mut i32,
+    out_interaction_exp1: *mut i32,
+    out_interaction_exp2: *mut i32,
 ) -> i32 {
-    if x_flat.is_null() || out_matrix.is_null() || out_base_indices.is_null() || out_exponents.is_null() {
+    if x_flat.is_null()
+        || out_matrix.is_null()
+        || out_base_indices.is_null()
+        || out_exponents.is_null()
+        || out_interaction_idx1.is_null()
+        || out_interaction_idx2.is_null()
+    {
         return -1;
     }
     let n = n as usize;
@@ -101,7 +127,14 @@ pub unsafe extern "C" fn ic_poly_expand(
     let degree = degree as u32;
 
     let x = matrix_from_raw(x_flat, n, p);
-    let result = polynomial_expand(&x, degree, include_bias != 0, clip_threshold, None);
+    let result = polynomial_expand(
+        &x,
+        degree,
+        include_bias != 0,
+        include_interactions != 0,
+        clip_threshold,
+        None,
+    );
     let n_cols = result.info.len();
 
     // Copy expanded matrix (row-major)
@@ -115,9 +148,46 @@ pub unsafe extern "C" fn ic_poly_expand(
     // Copy column metadata
     let out_bi = slice::from_raw_parts_mut(out_base_indices, n_cols);
     let out_ex = slice::from_raw_parts_mut(out_exponents, n_cols);
+    let out_i1 = slice::from_raw_parts_mut(out_interaction_idx1, n_cols);
+    let out_i2 = slice::from_raw_parts_mut(out_interaction_idx2, n_cols);
+    let mut out_e1 = if out_interaction_exp1.is_null() {
+        None
+    } else {
+        Some(slice::from_raw_parts_mut(out_interaction_exp1, n_cols))
+    };
+    let mut out_e2 = if out_interaction_exp2.is_null() {
+        None
+    } else {
+        Some(slice::from_raw_parts_mut(out_interaction_exp2, n_cols))
+    };
+
     for j in 0..n_cols {
         out_bi[j] = result.info[j].base_feature_index as i32;
         out_ex[j] = result.info[j].exponent;
+
+        // Handle interaction indices and exponents
+        match &result.info[j].interaction_exponents {
+            Some(exponents) if exponents.len() >= 2 => {
+                out_i1[j] = result.info[j].interaction_indices.as_ref().unwrap()[0] as i32;
+                out_i2[j] = result.info[j].interaction_indices.as_ref().unwrap()[1] as i32;
+                if let Some(ref mut e1) = out_e1 {
+                    e1[j] = exponents[0];
+                }
+                if let Some(ref mut e2) = out_e2 {
+                    e2[j] = exponents[1];
+                }
+            }
+            _ => {
+                out_i1[j] = -1;
+                out_i2[j] = -1;
+                if let Some(ref mut e1) = out_e1 {
+                    e1[j] = 0;
+                }
+                if let Some(ref mut e2) = out_e2 {
+                    e2[j] = 0;
+                }
+            }
+        }
     }
 
     n_cols as i32
@@ -217,12 +287,7 @@ pub unsafe extern "C" fn ic_sample_gaussian_knockoffs(
 ///
 /// `sequence_type`: 0 = Riemann Zeta (default), 1 = Geometric.
 #[no_mangle]
-pub extern "C" fn ic_alpha_spending_budget(
-    t: i32,
-    q: f64,
-    sequence_type: i32,
-    gamma: f64,
-) -> f64 {
+pub extern "C" fn ic_alpha_spending_budget(t: i32, q: f64, sequence_type: i32, gamma: f64) -> f64 {
     let seq = seq_from_code(sequence_type);
     alpha_spending_budget(t as usize, q, seq, gamma)
 }
@@ -477,4 +542,76 @@ pub unsafe extern "C" fn ic_baseline_poly_stlsq_fit(
         out_base_indices,
         out_exponents,
     )
+}
+
+// ---------------------------------------------------------------------------
+// GMM (Penalized Gaussian Mixture Model)
+// ---------------------------------------------------------------------------
+
+use crate::gmm::PenalizedGMM;
+
+/// Fit a Penalized GMM and return component weights, means, and precisions.
+///
+/// # Arguments
+/// - `x_flat`: data matrix (n×p, row-major)
+/// - `n`, `p`: dimensions
+/// - `n_components`: number of GMM components (1 for single Gaussian)
+/// - `alpha`: L1 regularization for precision matrix
+/// - `max_iter`: maximum EM iterations
+/// - `seed`: random seed
+/// - `out_weights`: component weights (n_components doubles)
+/// - `out_means`: component means (n_components*p doubles, row-major)
+/// - `out_precisions`: precision matrices (n_components*p*p doubles, row-major)
+///
+/// # Returns
+/// Number of components fitted, or -1 on error.
+///
+/// # Safety
+/// All pointer arguments must be non-null and point to sufficient memory.
+#[no_mangle]
+pub unsafe extern "C" fn ic_gmm_fit(
+    x_flat: *const f64,
+    n: i32,
+    p: i32,
+    n_components: i32,
+    alpha: f64,
+    max_iter: i32,
+    seed: u64,
+    out_weights: *mut f64,
+    out_means: *mut f64,
+    out_precisions: *mut f64,
+) -> i32 {
+    if x_flat.is_null() || out_weights.is_null() || out_means.is_null() || out_precisions.is_null()
+    {
+        return -1;
+    }
+
+    let x = matrix_from_raw(x_flat, n as usize, p as usize);
+    let k = n_components as usize;
+    let p = p as usize;
+
+    let mut gmm = PenalizedGMM::new(k, alpha, max_iter as usize, seed);
+    gmm.fit(&x);
+
+    let out_w = slice::from_raw_parts_mut(out_weights, k);
+    let out_m = slice::from_raw_parts_mut(out_means, k * p);
+    let out_p = slice::from_raw_parts_mut(out_precisions, k * p * p);
+
+    for (i, comp) in gmm.components.iter().enumerate() {
+        out_w[i] = comp.weight;
+
+        // Copy mean
+        for j in 0..p {
+            out_m[i * p + j] = comp.mean[j];
+        }
+
+        // Copy precision matrix (row-major)
+        for r in 0..p {
+            for c in 0..p {
+                out_p[i * p * p + r * p + c] = comp.precision[(r, c)];
+            }
+        }
+    }
+
+    k as i32
 }

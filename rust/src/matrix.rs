@@ -73,13 +73,21 @@ pub fn mat_add(a: &Matrix, b: &Matrix) -> Matrix {
     assert_eq!(a.rows, b.rows, "mat_add: row mismatch");
     assert_eq!(a.cols, b.cols, "mat_add: col mismatch");
     let data = a.data.iter().zip(&b.data).map(|(&x, &y)| x + y).collect();
-    Matrix { rows: a.rows, cols: a.cols, data }
+    Matrix {
+        rows: a.rows,
+        cols: a.cols,
+        data,
+    }
 }
 
 /// Scale: B = alpha * A.
 pub fn mat_scale(a: &Matrix, alpha: f64) -> Matrix {
     let data = a.data.iter().map(|&x| alpha * x).collect();
-    Matrix { rows: a.rows, cols: a.cols, data }
+    Matrix {
+        rows: a.rows,
+        cols: a.cols,
+        data,
+    }
 }
 
 /// Matrix multiplication: C = A * B.
@@ -256,10 +264,7 @@ pub fn gershgorin_lower_bound(a: &Matrix) -> f64 {
     let n = a.rows;
     let mut min_lb = f64::INFINITY;
     for i in 0..n {
-        let row_sum: f64 = (0..n)
-            .filter(|&j| j != i)
-            .map(|j| a[(i, j)].abs())
-            .sum();
+        let row_sum: f64 = (0..n).filter(|&j| j != i).map(|j| a[(i, j)].abs()).sum();
         let lb = a[(i, i)] - row_sum;
         if lb < min_lb {
             min_lb = lb;

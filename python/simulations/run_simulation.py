@@ -401,7 +401,7 @@ def run_simulation(config: SimulationConfig) -> list[SimulationResult]:
                 warnings.simplefilter("ignore")
                 results = run_comparison(
                     bundle,
-                    true_base_indices=dataset.true_base_indices,
+                    true_poly_terms=dataset.true_poly_terms,
                     output_prefix=None,
                     degree=config.degree,
                     n_components=config.n_components,

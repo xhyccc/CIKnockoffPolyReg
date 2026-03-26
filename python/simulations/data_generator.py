@@ -43,9 +43,16 @@ class SimulatedDataset:
     Attributes
     ----------
     X : ndarray of shape (n_labeled, p)
-        Labeled feature matrix drawn from the GMM.
+        Labeled feature matrix drawn from the GMM (training set).
     y : ndarray of shape (n_labeled,)
-        Response vector y = Φ(X) β* + ε.
+        Response vector y = Φ(X) β* + ε (training set).
+    X_test : ndarray of shape (n_test, p) or None
+        Independent test set drawn from the same GMM.
+        Used for evaluating model generalization.
+    y_test : ndarray of shape (n_test,) or None
+        True response values for X_test (without noise for clean evaluation).
+    y_test_noisy : ndarray of shape (n_test,) or None
+        Response values for X_test with noise (for realistic evaluation).
     X_unlabeled : ndarray of shape (n_unlabeled, p) or None
         Extra unlabeled observations drawn from the same GMM.
         Set to ``None`` in the supervised-only setting.
@@ -58,7 +65,9 @@ class SimulatedDataset:
     noise_std : float
         Standard deviation of the additive Gaussian noise ε.
     n_labeled : int
-        Number of labeled observations.
+        Number of labeled observations (training set size).
+    n_test : int
+        Number of test observations.
     n_unlabeled : int
         Number of unlabeled observations (0 in the supervised setting).
     p : int
@@ -75,12 +84,16 @@ class SimulatedDataset:
 
     X: NDArray[np.float64]
     y: NDArray[np.float64]
+    X_test: Optional[NDArray[np.float64]]
+    y_test: Optional[NDArray[np.float64]]
+    y_test_noisy: Optional[NDArray[np.float64]]
     X_unlabeled: Optional[NDArray[np.float64]]
     true_base_indices: set
     true_poly_terms: list
     true_coef: NDArray[np.float64]
     noise_std: float
     n_labeled: int
+    n_test: int
     n_unlabeled: int
     p: int
     k: int
@@ -168,6 +181,7 @@ def generate_simulation(
     n_components: int = 2,
     noise_std: float = 0.5,
     n_unlabeled: int = 0,
+    n_test: int = 200,
     coef_scale: float = 1.0,
     random_state: Optional[int] = None,
 ) -> SimulatedDataset:
@@ -188,7 +202,7 @@ def generate_simulation(
     Parameters
     ----------
     n_labeled : int
-        Number of labeled (X, y) observations.
+        Number of labeled (X, y) observations (training set).
     p : int
         Number of base features.
     k : int
@@ -203,6 +217,10 @@ def generate_simulation(
     n_unlabeled : int
         Number of extra unlabeled observations (semi-supervised).  Pass 0
         for the pure supervised setting.
+    n_test : int
+        Fixed number of test samples to generate (default 200).
+        Test set is drawn independently from the same GMM.
+        Set to 0 to skip test set generation.
     coef_scale : float
         Scale factor for the non-zero regression coefficients.
     random_state : int or None
@@ -242,12 +260,24 @@ def generate_simulation(
     names = poly_result.feature_names                 # list of str
     base_indices_list = poly_result.base_feature_indices  # list of int (base feature per col)
     exponents = poly_result.power_exponents           # list of int (exponent per col)
+    interaction_list = poly_result.interaction_indices  # list of Optional[list[int]]
 
     # Randomly choose k distinct polynomial term indices from the full dictionary
     true_poly_idx: list[int] = sorted(
         rng.choice(len(base_indices_list), size=k, replace=False)
     )
-    true_base_indices: set[int] = {base_indices_list[i] for i in true_poly_idx}
+    # Compute true_base_indices correctly, handling interaction terms
+    true_base_indices: set[int] = set()
+    for i in true_poly_idx:
+        base_idx = base_indices_list[i]
+        interaction = interaction_list[i] if i < len(interaction_list) else None
+        if interaction is not None:
+            # Interaction term: add all involved base features
+            for idx in interaction:
+                true_base_indices.add(idx)
+        elif base_idx >= 0:
+            # Monomial term: add the base feature
+            true_base_indices.add(base_idx)
 
     # Non-zero coefficients drawn uniformly from [-2, -0.5] ∪ [0.5, 2]
     signs = rng.choice([-1, 1], size=k)
@@ -265,19 +295,59 @@ def generate_simulation(
     y = Phi @ beta_star + noise_std * rng.standard_normal(n_labeled)
 
     # ------------------------------------------------------------------
+    # Generate independent test set (from same GMM)
+    # Use fixed n_test (default 200), or skip if n_test=0
+    # ------------------------------------------------------------------
+    X_test = None
+    y_test_clean = None
+    y_test_noisy = None
+    if n_test > 0:
+        X_test = generate_gmm_features(
+            n_test, p,
+            n_components=n_components,
+            random_state=int(rng.integers(0, 2**31)) + 1,  # Different seed
+        )
+        
+        # Compute test responses using the SAME beta_star
+        poly_test = PolynomialDictionary(degree=degree, include_bias=False)
+        poly_test_result = poly_test.expand(X_test)
+        Phi_test = poly_test_result.matrix
+        
+        # Clean test response (no noise) - for measuring signal-to-noise
+        y_test_clean = Phi_test @ beta_star
+        # Noisy test response - for realistic evaluation
+        y_test_noisy = y_test_clean + noise_std * rng.standard_normal(n_test)
+
+    # ------------------------------------------------------------------
     # True poly terms for reference
     # ------------------------------------------------------------------
-    true_poly_terms = [[base_indices_list[i], exponents[i]] for i in true_poly_idx]
+    # Include interaction info if present
+    # (interaction_list already defined above)
+    true_poly_terms = []
+    for i in true_poly_idx:
+        base_idx = base_indices_list[i]
+        exp = exponents[i]
+        interaction = interaction_list[i] if i < len(interaction_list) else None
+        if interaction is not None:
+            # Interaction term: [base_idx, exp, interaction_indices]
+            true_poly_terms.append([base_idx, exp, interaction])
+        else:
+            # Monomial term: [base_idx, exp]
+            true_poly_terms.append([base_idx, exp])
 
     return SimulatedDataset(
         X=X_labeled,
         y=y,
+        X_test=X_test,
+        y_test=y_test_clean,
+        y_test_noisy=y_test_noisy,
         X_unlabeled=X_unlabeled,
         true_base_indices=true_base_indices,
         true_poly_terms=true_poly_terms,
         true_coef=true_coef,
         noise_std=noise_std,
         n_labeled=n_labeled,
+        n_test=n_test,
         n_unlabeled=n_unlabeled,
         p=p,
         k=k,

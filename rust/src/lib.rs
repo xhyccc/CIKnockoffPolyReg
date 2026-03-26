@@ -12,6 +12,7 @@
 
 pub mod baselines;
 pub mod ffi;
+pub mod gmm;
 pub mod knockoffs;
 pub mod matrix;
 pub mod polynomial;

@@ -172,6 +172,12 @@ class ResultBundle:
     n_false_positives: Optional[int] = None
     n_false_negatives: Optional[int] = None
 
+    # Test set performance (None when test data not available)
+    test_r_squared: Optional[float] = None
+    test_rmse: Optional[float] = None
+    test_mae: Optional[float] = None
+    n_test: Optional[int] = None
+
     # Method-specific parameters and extras
     params: dict = field(default_factory=dict)
     extra: dict = field(default_factory=dict)
@@ -448,6 +454,100 @@ def compute_metrics(
         n_false_negatives=fn,
         peak_memory_mb=peak_memory_mb,
     )
+
+
+# =============================================================================
+# Polynomial Term Evaluation (Correct Evaluation)
+# =============================================================================
+
+def compute_polynomial_term_metrics(
+    selected_terms: list,
+    true_poly_terms: list,
+    peak_memory_mb: Optional[float] = None,
+) -> DiscoveryMetrics:
+    """Compute discovery metrics for polynomial term selection.
+    
+    This is the CORRECT evaluation method that compares exact polynomial terms
+    [base_idx, exponent] or [base_idx, exponent, interaction_indices] 
+    rather than just base feature indices.
+    
+    Parameters
+    ----------
+    selected_terms : list of [int, int] or [int, int, list]
+        Selected polynomial terms as [base_feature_index, exponent] pairs
+        or [base_feature_index, exponent, interaction_indices] for interaction terms.
+    true_poly_terms : list of [int, int] or [int, int, list]
+        Ground truth polynomial terms as [base_feature_index, exponent] pairs
+        or [base_feature_index, exponent, interaction_indices] for interaction terms.
+    peak_memory_mb : float or None
+        Peak memory usage.
+        
+    Returns
+    -------
+    DiscoveryMetrics dataclass with FDR, TPR, F1 computed on exact term matches.
+    """
+    # Convert to comparable format for set operations
+    # For interaction terms, we need to handle the list in the tuple
+    def term_to_tuple(term):
+        """Convert term to a hashable tuple."""
+        if len(term) == 2:
+            return tuple(term)
+        elif len(term) >= 3:
+            # Handle interaction term: convert interaction_indices list to tuple
+            base_idx, exp = term[0], term[1]
+            interaction = tuple(term[2]) if term[2] is not None else None
+            return (base_idx, exp, interaction)
+        return tuple(term)
+    
+    selected_set = set(term_to_tuple(t) for t in selected_terms)
+    true_set = set(term_to_tuple(t) for t in true_poly_terms)
+    
+    # Compute confusion matrix
+    tp_set = selected_set & true_set
+    fp_set = selected_set - true_set
+    fn_set = true_set - selected_set
+    
+    tp = len(tp_set)
+    fp = len(fp_set)
+    fn = len(fn_set)
+    n_sel = len(selected_set)
+    
+    # Compute metrics
+    fdr = fp / max(1, n_sel)
+    tpr = tp / max(1, len(true_set))
+    precision = tp / max(1, n_sel)
+    
+    return DiscoveryMetrics(
+        fdr=fdr,
+        tpr=tpr,
+        n_selected=n_sel,
+        n_true_positives=tp,
+        n_false_positives=fp,
+        n_false_negatives=fn,
+        peak_memory_mb=peak_memory_mb,
+    )
+
+
+def format_polynomial_terms(terms: list) -> list[str]:
+    """Format polynomial terms as human-readable strings.
+    
+    Parameters
+    ----------
+    terms : list of [int, int]
+        Terms as [base_idx, exponent] pairs.
+        
+    Returns
+    -------
+    list of str
+        Formatted strings like "x_0^2", "x_1^(-1)".
+    """
+    formatted = []
+    for base_idx, exp in terms:
+        if exp > 0:
+            formatted.append(f"x_{base_idx}^{exp}")
+        else:
+            formatted.append(f"x_{base_idx}^({exp})")
+    return formatted
 
 
 @contextmanager

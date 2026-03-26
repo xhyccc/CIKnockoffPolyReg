@@ -19,12 +19,13 @@ applied to the marginal conditional covariance Sigma_{B|A}.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
 
 from .gmm_phase import PenalizedGMM
+from .rust_gmm import RustPenalizedGMM
 
 
 class ConditionalKnockoffGenerator:
@@ -44,7 +45,7 @@ class ConditionalKnockoffGenerator:
 
     def __init__(
         self,
-        gmm: PenalizedGMM,
+        gmm: Union[PenalizedGMM, RustPenalizedGMM],
         sdp_method: str = "equicorrelated",
         random_state: Optional[int] = None,
     ) -> None:

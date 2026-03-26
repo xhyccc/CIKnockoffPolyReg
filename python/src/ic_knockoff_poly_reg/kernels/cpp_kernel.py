@@ -199,6 +199,7 @@ class CppPolynomialKernel(PolynomialKernel):
             feature_names=names,
             base_feature_indices=base_indices,
             power_exponents=exponents,
+            interaction_indices=[None] * len(base_indices),
         )
 
 
@@ -301,13 +302,46 @@ def _build_feature_names(
     base_names: list[str],
     base_indices: list[int],
     exponents: list[int],
+    interaction_indices: list = None,
+    interaction_exponents: list = None,
 ) -> list[str]:
-    """Reconstruct feature names from base names + (base_index, exponent) pairs."""
+    """Reconstruct feature names from base names + (base_index, exponent) pairs.
+    
+    For interaction terms (base_index == -2), uses interaction_indices and 
+    interaction_exponents to build the proper name like "x0^2*x1^(-1)".
+    """
     names = []
-    for bi, ex in zip(base_indices, exponents):
-        if bi < 0:
+    for i, (bi, ex) in enumerate(zip(base_indices, exponents)):
+        if bi == -1:
             # Bias column: base_feature_index == -1, exponent == 0
             names.append("1")
+        elif bi == -2:
+            # Interaction term: need to use interaction_indices and exponents
+            if (interaction_indices is not None and i < len(interaction_indices) and
+                interaction_exponents is not None and i < len(interaction_exponents)):
+                inter = interaction_indices[i]
+                inter_exp = interaction_exponents[i]
+                if inter is not None and inter_exp is not None and len(inter) >= 2 and len(inter_exp) >= 2:
+                    # Build interaction name with exponents
+                    parts = []
+                    for idx, exp in zip(inter, inter_exp):
+                        if 0 <= idx < len(base_names):
+                            base_name = base_names[idx]
+                        else:
+                            base_name = f"x{idx}"
+                        
+                        # Format with exponent
+                        if exp == 1:
+                            parts.append(base_name)
+                        elif exp < 0:
+                            parts.append(f"{base_name}^({exp})")
+                        else:
+                            parts.append(f"{base_name}^{exp}")
+                    names.append("*".join(parts))
+                else:
+                    names.append(f"inter_{i}")
+            else:
+                names.append(f"inter_{i}")
         elif ex == 1:
             names.append(base_names[bi])
         elif ex > 1:
